@@ -24,6 +24,18 @@ export const STEP_NAMES: Record<CircleStep, { key: string; gloss: string }> = {
   8: { key: 'Change', gloss: 'master of both worlds' },
 };
 
+/**
+ * The conventional act mapping: Act One runs to the threshold crossing, Act Two
+ * is the chaos half, Act Three begins with the return. 0 means the circle could
+ * not place the scene — better to say so than to file it under Act One.
+ */
+export function actOfStep(step: number | undefined): 0 | 1 | 2 | 3 {
+  if (!step || step < 1 || step > 8) return 0;
+  if (step <= 3) return 1;
+  if (step <= 6) return 2;
+  return 3;
+}
+
 /** Steps 1-2 and 7-8 sit in the ordered world; 3-6 in chaos. */
 export function isChaos(step: CircleStep): boolean {
   return step >= 3 && step <= 6;

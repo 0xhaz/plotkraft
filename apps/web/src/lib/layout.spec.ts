@@ -137,3 +137,72 @@ describe('actLayout — collapsing', () => {
     expect(bands).toHaveLength(3);
   });
 });
+
+import { outlineLayout, type SequenceMeta } from './layout';
+
+describe('outlineLayout', () => {
+  const scenes = Array.from({ length: 30 }, (_, i) => ({
+    id: `s${i}`,
+    index: i,
+    circleStep: i < 10 ? 1 : i < 25 ? 5 : 8,
+  }));
+
+  const sequences: SequenceMeta[] = [
+    { order: 0, name: 'Opening', purpose: 'establish', startIndex: 0, endIndex: 9, act: 1 },
+    { order: 1, name: 'The middle', purpose: 'complicate', startIndex: 10, endIndex: 24, act: 2 },
+    { order: 2, name: 'The end', purpose: 'resolve', startIndex: 25, endIndex: 29, act: 3 },
+  ];
+
+  it('nests sequences inside their acts', () => {
+    const o = outlineLayout(scenes, sequences, new Set(), new Set());
+    expect(o.actBands.map((b) => b.act)).toEqual([1, 2, 3]);
+    expect(o.seqBands.map((b) => b.name)).toEqual(['Opening', 'The middle', 'The end']);
+  });
+
+  it('places every sequence row inside its own act band', () => {
+    const o = outlineLayout(scenes, sequences, new Set(), new Set());
+    for (const band of o.seqBands) {
+      const act = o.actBands.find((a) => a.act === band.act)!;
+      expect(band.y).toBeGreaterThanOrEqual(act.y);
+      expect(band.y + band.height).toBeLessThanOrEqual(act.y + act.height);
+    }
+  });
+
+  it('hides only the scenes of a collapsed sequence', () => {
+    const o = outlineLayout(scenes, sequences, new Set([1]), new Set());
+    expect(o.hidden.size).toBe(15);
+    expect(o.hidden.has('s10')).toBe(true);
+    expect(o.hidden.has('s0')).toBe(false);
+  });
+
+  it('collapsing an act hides its scenes but keeps its sequence rows', () => {
+    const o = outlineLayout(scenes, sequences, new Set(), new Set([2]));
+    expect(o.hidden.size).toBe(15);
+    // The rows survive so the act still reads as an outline.
+    expect(o.seqBands.filter((b) => b.act === 2)).toHaveLength(1);
+  });
+
+  it('shrinks the board when a sequence collapses', () => {
+    const open = outlineLayout(scenes, sequences, new Set(), new Set());
+    const shut = outlineLayout(scenes, sequences, new Set([1]), new Set());
+    const lastOpen = open.actBands[open.actBands.length - 1];
+    const lastShut = shut.actBands[shut.actBands.length - 1];
+    expect(lastShut.y).toBeLessThan(lastOpen.y);
+  });
+
+  it('positions no scene it has hidden', () => {
+    const o = outlineLayout(scenes, sequences, new Set([0, 1, 2]), new Set());
+    expect(o.positions.size).toBe(0);
+    expect(o.hidden.size).toBe(30);
+  });
+
+  it('ignores a sequence range with no matching scenes', () => {
+    const o = outlineLayout(
+      scenes,
+      [{ order: 0, name: 'Ghost', purpose: '', startIndex: 900, endIndex: 910, act: 1 }],
+      new Set(),
+      new Set(),
+    );
+    expect(o.seqBands[0].sceneIds).toEqual([]);
+  });
+});

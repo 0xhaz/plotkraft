@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  actOfStep,
   analyzeCircle,
   estimatePageWeight,
   isChaos,
@@ -158,5 +159,19 @@ describe('helpers', () => {
   it('estimates page weight from text length with a floor', () => {
     expect(estimatePageWeight('x'.repeat(800))).toBeCloseTo(1, 2);
     expect(estimatePageWeight('')).toBe(0.1);
+  });
+});
+
+describe('actOfStep', () => {
+  it('maps the eight steps onto three acts', () => {
+    expect([1, 2, 3].map((s) => actOfStep(s))).toEqual([1, 1, 1]);
+    expect([4, 5, 6].map((s) => actOfStep(s))).toEqual([2, 2, 2]);
+    expect([7, 8].map((s) => actOfStep(s))).toEqual([3, 3]);
+  });
+
+  it('reports an unplaced scene rather than filing it under Act One', () => {
+    expect(actOfStep(undefined)).toBe(0);
+    expect(actOfStep(0)).toBe(0);
+    expect(actOfStep(12)).toBe(0);
   });
 });

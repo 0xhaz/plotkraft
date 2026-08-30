@@ -129,3 +129,121 @@ export function actLayout(
 
   return { positions, bands, hidden };
 }
+
+export const SEQ_HEADER_H = 40;
+
+export interface SequenceMeta {
+  order: number;
+  name: string;
+  purpose: string;
+  startIndex: number;
+  endIndex: number;
+  act: Act;
+}
+
+export interface SequenceBand {
+  key: string;
+  order: number;
+  name: string;
+  purpose: string;
+  act: Act;
+  y: number;
+  height: number;
+  sceneIds: string[];
+  collapsed: boolean;
+}
+
+export interface Outline {
+  positions: Map<string, Placed>;
+  actBands: ActBand[];
+  seqBands: SequenceBand[];
+  hidden: Set<string>;
+}
+
+/**
+ * The three-level board: act, then sequence, then scenes.
+ *
+ * Acts alone were not enough — a feature's Act Two ran to 138 cards. The
+ * sequence is the rung between them, and collapsing at that level is what turns
+ * a 244-scene script into ten readable rows.
+ */
+export function outlineLayout(
+  scenes: { id: string; index: number; circleStep?: number }[],
+  sequences: SequenceMeta[],
+  collapsedSeqs: ReadonlySet<number>,
+  collapsedActs: ReadonlySet<Act>,
+  columns = COLUMNS,
+): Outline {
+  const positions = new Map<string, Placed>();
+  const hidden = new Set<string>();
+  const actBands: ActBand[] = [];
+  const seqBands: SequenceBand[] = [];
+
+  const byIndex = new Map(scenes.map((s) => [s.index, s]));
+  const ordered = [...sequences].sort((a, b) => a.startIndex - b.startIndex);
+  const acts: Act[] = [1, 2, 3, 0];
+
+  let cursorY = 0;
+
+  for (const act of acts) {
+    const inAct = ordered.filter((q) => q.act === act);
+    if (inAct.length === 0) continue;
+
+    const actTop = cursorY;
+    const actSceneIds: string[] = [];
+    const actCollapsed = collapsedActs.has(act);
+    let innerY = ACT_HEADER_H;
+
+    for (const q of inAct) {
+      const sceneIds: string[] = [];
+      for (let i = q.startIndex; i <= q.endIndex; i++) {
+        const scene = byIndex.get(i);
+        if (scene) sceneIds.push(scene.id);
+      }
+      actSceneIds.push(...sceneIds);
+
+      // A collapsed act hides its sequences' scenes but keeps the sequence rows,
+      // so the writer can still read the shape of the act without the cards.
+      const seqCollapsed = actCollapsed || collapsedSeqs.has(q.order);
+
+      if (seqCollapsed) {
+        for (const id of sceneIds) hidden.add(id);
+      } else {
+        sceneIds.forEach((id, i) => {
+          const p = serpentinePosition(i, columns);
+          positions.set(id, { x: p.x, y: actTop + innerY + SEQ_HEADER_H + p.y });
+        });
+      }
+
+      const rows = seqCollapsed ? 0 : Math.ceil(sceneIds.length / columns);
+      const height = SEQ_HEADER_H + rows * (CARD_H + GAP_Y);
+
+      seqBands.push({
+        key: `${act}-${q.order}`,
+        order: q.order,
+        name: q.name,
+        purpose: q.purpose,
+        act,
+        y: actTop + innerY,
+        height,
+        sceneIds,
+        collapsed: seqCollapsed,
+      });
+
+      innerY += height + 10;
+    }
+
+    actBands.push({
+      act,
+      label: ACT_LABEL[act],
+      y: actTop,
+      height: innerY + 8,
+      sceneIds: actSceneIds,
+      collapsed: actCollapsed,
+    });
+
+    cursorY = actTop + innerY + 8 + GAP_Y;
+  }
+
+  return { positions, actBands, seqBands, hidden };
+}

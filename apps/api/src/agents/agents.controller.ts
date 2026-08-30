@@ -10,6 +10,7 @@ import { ParallelService } from './parallel.service';
 import { StoryCircleService } from './story-circle.service';
 import { NotesService } from './notes.service';
 import { CraftService } from './craft.service';
+import { SequencesService } from './sequences.service';
 import type { NoteSource } from './notes';
 
 @Controller('projects/:id/agents')
@@ -25,6 +26,7 @@ export class AgentsController {
     private readonly notes: NotesService,
     private readonly membership: MembershipService,
     private readonly craft: CraftService,
+    private readonly sequences: SequencesService,
   ) {}
 
   /** Which agents can actually run right now — surfaced so the UI never fakes readiness. */
@@ -71,6 +73,13 @@ export class AgentsController {
   async runCraft(@Param('id') id: string, @Uid() uid: string) {
     await this.membership.assertMember(id, uid);
     return this.craft.analyze(id);
+  }
+
+  /** Divide the script into named sequences: the rung between act and scene. */
+  @Post('sequences')
+  async runSequences(@Param('id') id: string, @Uid() uid: string) {
+    await this.membership.assertMember(id, uid);
+    return this.sequences.analyze(id);
   }
 
   @Post('research')

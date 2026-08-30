@@ -8,10 +8,11 @@ import { ParallelService } from './parallel.service';
 import { StoryCircleService } from './story-circle.service';
 import { NotesService } from './notes.service';
 import { CraftService } from './craft.service';
+import { SequencesService } from './sequences.service';
 
 @Module({
   controllers: [AgentsController],
-  providers: [GeminiService, CausalityService, WhatIfService, ParallelService, ResearcherService, StoryCircleService, NotesService, CraftService],
-  exports: [GeminiService, CausalityService, WhatIfService, ParallelService, ResearcherService, StoryCircleService, NotesService, CraftService],
+  providers: [GeminiService, CausalityService, WhatIfService, ParallelService, ResearcherService, StoryCircleService, NotesService, CraftService, SequencesService],
+  exports: [GeminiService, CausalityService, WhatIfService, ParallelService, ResearcherService, StoryCircleService, NotesService, CraftService, SequencesService],
 })
 export class AgentsModule {}

@@ -108,3 +108,16 @@ export async function runCraftAnalysis(
   }
   return res.json();
 }
+
+export async function findSequences(
+  projectId: string,
+): Promise<{ sequences: number; scenes: number }> {
+  const res = await authedFetch(`${API_BASE}/projects/${projectId}/agents/sequences`, {
+    method: 'POST',
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.message ?? `sequence pass failed (${res.status})`);
+  }
+  return res.json();
+}
