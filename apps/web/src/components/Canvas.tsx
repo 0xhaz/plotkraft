@@ -59,15 +59,29 @@ export function Canvas({ projectId }: { projectId: string }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [circle, setCircle] = useState<CircleResult | null>(null);
+  const [accessDenied, setAccessDenied] = useState(false);
   const [notesOpen, setNotesOpen] = useState(false);
 
   useEffect(() => {
+    setAccessDenied(false);
+
+    // A listener without an error handler throws on permission-denied, and an
+    // uncaught throw inside a snapshot callback surfaces as a crash rather than
+    // as the ordinary "you cannot see this project" that it actually is.
+    const onError = (err: { code?: string }) => {
+      if (err.code === 'permission-denied') setAccessDenied(true);
+      else console.error('[canvas] snapshot listener failed', err);
+    };
+
     const unsubScenes = onSnapshot(
       query(collection(db(), 'projects', projectId, 'scenes'), orderBy('index')),
       (snap) => setScenes(snap.docs.map((d) => d.data() as SceneDoc)),
+      onError,
     );
-    const unsubEdges = onSnapshot(collection(db(), 'projects', projectId, 'edges'), (snap) =>
-      setEdgeDocs(snap.docs.map((d) => d.data() as EdgeDoc)),
+    const unsubEdges = onSnapshot(
+      collection(db(), 'projects', projectId, 'edges'),
+      (snap) => setEdgeDocs(snap.docs.map((d) => d.data() as EdgeDoc)),
+      onError,
     );
     return () => {
       unsubScenes();
@@ -205,6 +219,19 @@ export function Canvas({ projectId }: { projectId: string }) {
       }),
     [edgeDocs, brokenEdges],
   );
+
+  if (accessDenied) {
+    return (
+      <div style={D.wrap}>
+        <div style={D.title}>You don&apos;t have access to this project</div>
+        <p style={D.body}>
+          It may belong to another account, or it may no longer exist. Projects are visible
+          only to their members.
+        </p>
+        <a href="/new" style={D.link}>Start a new project</a>
+      </div>
+    );
+  }
 
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative' }}>
@@ -383,6 +410,17 @@ function Row({ label, value, tone }: { label: string; value: number; tone: strin
     </div>
   );
 }
+
+const D: Record<string, React.CSSProperties> = {
+  wrap: {
+    height: '100%', display: 'flex', flexDirection: 'column',
+    alignItems: 'center', justifyContent: 'center', gap: 10, padding: 24,
+    fontFamily: 'ui-sans-serif, system-ui, sans-serif', textAlign: 'center',
+  },
+  title: { color: '#e8eaed', fontSize: 16, fontWeight: 600 },
+  body: { color: '#8b95a3', fontSize: 13, lineHeight: 1.6, maxWidth: 420, margin: 0 },
+  link: { color: '#7aa2e3', fontSize: 13, marginTop: 4 },
+};
 
 const P: Record<string, React.CSSProperties> = {
   panel: {

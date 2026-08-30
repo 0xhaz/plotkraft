@@ -14,9 +14,15 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // Defensive on purpose. Reading `.data.memberUids` from a get() that found
+    // nothing raises an evaluation error rather than denying, which surfaces to
+    // the client as a crashed snapshot listener instead of a clean "no access".
+    // A missing project and a project you are not in should both simply be denied.
     function isMember(projectId) {
-      return signedIn() &&
-        request.auth.uid in get(/databases/$(database)/documents/projects/$(projectId)).data.memberUids;
+      let path = /databases/$(database)/documents/projects/$(projectId);
+      return signedIn()
+        && exists(path)
+        && request.auth.uid in get(path).data.get('memberUids', []);
     }
 
     // Only the listed fields changed in this write.

@@ -66,6 +66,7 @@ export function ScenePanel({
     return onSnapshot(
       collection(db(), 'projects', projectId, 'scenes', sceneId, 'flags'),
       (snap) => setFlags(snap.docs.map((d) => d.data() as Flag)),
+      (err) => console.error('[scene panel] flags listener failed', err),
     );
   }, [projectId, sceneId]);
 

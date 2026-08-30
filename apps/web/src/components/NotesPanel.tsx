@@ -53,12 +53,15 @@ export function NotesPanel({
   const [conflicts, setConflicts] = useState<NoteConflict[]>([]);
 
   useEffect(() => {
-    const unsubNotes = onSnapshot(collection(db(), 'projects', projectId, 'notes'), (s) =>
-      setNotes(s.docs.map((d) => d.data() as Note)),
+    const unsubNotes = onSnapshot(
+      collection(db(), 'projects', projectId, 'notes'),
+      (s) => setNotes(s.docs.map((d) => d.data() as Note)),
+      (err) => console.error('[notes panel] notes listener failed', err),
     );
     const unsubConflicts = onSnapshot(
       collection(db(), 'projects', projectId, 'noteConflicts'),
       (s) => setConflicts(s.docs.map((d) => d.data() as NoteConflict)),
+      (err) => console.error('[notes panel] conflicts listener failed', err),
     );
     return () => {
       unsubNotes();

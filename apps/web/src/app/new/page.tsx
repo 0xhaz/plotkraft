@@ -14,6 +14,13 @@ export default function NewProject() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  /** One click to a populated canvas — also the fastest way to demo the tool. */
+  async function loadSample() {
+    const res = await fetch('/samples/the-quiet-part.fountain');
+    setSource(await res.text());
+    setTitle('The Quiet Part');
+  }
+
   async function onFile(file: File) {
     setSource(await file.text());
     if (!title) setTitle(file.name.replace(/\.(fountain|txt)$/i, ''));
@@ -60,6 +67,15 @@ export default function NewProject() {
             </div>
           ) : (
             <div style={S.card}>
+              <button onClick={() => void loadSample()} style={S.sample}>
+                Load the sample screenplay
+              </button>
+              <p style={S.sampleHint}>
+                “The Quiet Part” — 13 scenes with a deliberately sagging second act, a
+                planted factual error and a missing opening beat, so every agent has
+                something real to find.
+              </p>
+
               <label style={S.label}>Title</label>
               <input
                 value={title}
@@ -123,6 +139,11 @@ const S: Record<string, React.CSSProperties> = {
     width: '100%', background: '#0f1216', border: '1px solid #2a2f38', borderRadius: 8,
     padding: '10px 12px', color: '#e8eaed', fontSize: 14, boxSizing: 'border-box',
   },
+  sample: {
+    background: 'transparent', color: '#7aa2e3', border: '1px dashed #2a3a52',
+    borderRadius: 8, padding: '10px 14px', fontSize: 13, cursor: 'pointer',
+  },
+  sampleHint: { color: '#6f7986', fontSize: 11.5, lineHeight: 1.55, margin: '8px 0 0' },
   primary: {
     marginTop: 20, background: '#3b6fd4', color: '#fff', border: 'none', borderRadius: 8,
     padding: '12px 18px', fontSize: 14, fontWeight: 600, cursor: 'pointer',

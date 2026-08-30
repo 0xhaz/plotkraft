@@ -7,7 +7,9 @@ import {
   assertSucceeds,
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
-import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, addDoc } from 'firebase/firestore';
+import {
+  doc, getDoc, setDoc, updateDoc, deleteDoc, collection, addDoc, getDocs, query,
+} from 'firebase/firestore';
 
 /**
  * Exercises firestore.rules against the emulator.
@@ -89,6 +91,31 @@ describe('project access', () => {
 
   it('denies a non-member reading scenes', async () => {
     await assertFails(getDoc(doc(asStranger(), 'projects', PID, 'scenes', SID)));
+  });
+});
+
+describe('missing or malformed projects deny cleanly', () => {
+  // A get() on a missing doc raises an evaluation error rather than denying,
+  // which reaches the browser as a crashed snapshot listener instead of "no
+  // access". Both cases must simply be denied.
+  it('denies listing scenes of a project that does not exist', async () => {
+    await assertFails(getDocs(query(collection(asMember(), 'projects', 'no-such-project', 'scenes'))));
+  });
+
+  it('denies reading a project that does not exist', async () => {
+    await assertFails(getDoc(doc(asMember(), 'projects', 'no-such-project')));
+  });
+
+  it('denies a project document with no memberUids field', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'projects', 'malformed'), { id: 'malformed', title: 'x' });
+    });
+    await assertFails(getDoc(doc(asMember(), 'projects', 'malformed')));
+    await assertFails(getDocs(query(collection(asMember(), 'projects', 'malformed', 'scenes'))));
+  });
+
+  it('still lets a member list scenes of a project they belong to', async () => {
+    await assertSucceeds(getDocs(query(collection(asMember(), 'projects', PID, 'scenes'))));
   });
 });
 
