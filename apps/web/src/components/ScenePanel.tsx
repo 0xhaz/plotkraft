@@ -13,6 +13,7 @@ interface Citation {
 interface Flag {
   id: string;
   kind: string;
+  researchVerdict?: 'supported' | 'contradicted' | 'unclear';
   severity: 'info' | 'warn' | 'critical';
   message: string;
   agent: string;
@@ -23,6 +24,17 @@ interface Flag {
 }
 
 const SEVERITY_COLOR = { info: '#7aa2e3', warn: '#d08a3e', critical: '#e05252' } as const;
+
+/**
+ * A verified claim is shown as prominently as a contradicted one. If only problems
+ * appeared, a well-researched script would render nothing and the writer would have
+ * no evidence the Researcher had read it at all.
+ */
+const VERDICT_BADGE = {
+  supported: { label: 'verified', color: '#4f9d69' },
+  contradicted: { label: 'contradicted', color: '#e05252' },
+  unclear: { label: 'sources unclear', color: '#9aa4b2' },
+} as const;
 
 /**
  * Scene detail: what the agents found, and the writer's verdict on each finding.
@@ -116,9 +128,29 @@ function FlagCard({
   onVerdict: (v: Flag['verdict']) => void;
 }) {
   return (
-    <div style={{ ...S.card, borderLeft: `3px solid ${SEVERITY_COLOR[flag.severity]}` }}>
+    <div
+      style={{
+        ...S.card,
+        borderLeft: `3px solid ${
+          flag.researchVerdict
+            ? VERDICT_BADGE[flag.researchVerdict].color
+            : SEVERITY_COLOR[flag.severity]
+        }`,
+      }}
+    >
       <div style={S.agentRow}>
         <span style={{ color: SEVERITY_COLOR[flag.severity], fontWeight: 600 }}>{flag.agent}</span>
+        {flag.researchVerdict && (
+          <span
+            style={{
+              color: VERDICT_BADGE[flag.researchVerdict].color,
+              border: `1px solid ${VERDICT_BADGE[flag.researchVerdict].color}55`,
+              borderRadius: 4, padding: '1px 5px', fontSize: 10, letterSpacing: 0.3,
+            }}
+          >
+            {VERDICT_BADGE[flag.researchVerdict].label}
+          </span>
+        )}
         {/* A flag computed against an older draft says so, rather than posing as current. */}
         {stale && <span style={S.stale}>possibly stale — re-run</span>}
       </div>

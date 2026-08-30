@@ -93,8 +93,10 @@ export class ResearcherService {
       const r = outcome.value;
       if (!r) continue;
 
-      // Only surface something the writer needs to see. A supported claim is not news.
-      if (r.verdict.verdict === 'supported') continue;
+      // Supported claims are recorded too, at info severity. A verified fact with
+      // its sources is what makes the tool trustworthy — if only problems were
+      // shown, a well-researched script would display nothing at all, and the
+      // writer would have no way to see the Researcher had actually read it.
 
       const sceneRef = projectRef.collection('scenes').doc(String(r.scene.id));
       const flagRef = sceneRef.collection('flags').doc();
@@ -105,7 +107,9 @@ export class ResearcherService {
         id: flagRef.id,
         sceneId: String(r.scene.id),
         kind: 'research',
-        severity: r.verdict.severity,
+        researchVerdict: r.verdict.verdict,
+        // A supported claim is never louder than info, whatever the model says.
+        severity: r.verdict.verdict === 'supported' ? 'info' : r.verdict.severity,
         message: r.verdict.message,
         agent: 'Researcher',
         claim: r.claim.text,
