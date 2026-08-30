@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { FirebaseService } from '../firebase/firebase.service';
-import { parseFountain } from '../ingest/fountain.parser';
+import { parseFountain, type ParsedScript } from '../ingest/fountain.parser';
+import { PdfService } from '../ingest/pdf.service';
 
 /**
  * Scene cards are laid out on import; the writer drags them wherever they like
@@ -26,7 +27,10 @@ function serpentine(index: number): { x: number; y: number } {
 
 @Injectable()
 export class ProjectsService {
-  constructor(private readonly fb: FirebaseService) {}
+  constructor(
+    private readonly fb: FirebaseService,
+    private readonly pdf: PdfService,
+  ) {}
 
   /**
    * Ingest a Fountain script into a new project.
@@ -36,7 +40,19 @@ export class ProjectsService {
    * version field is what makes stale edits visible instead of silent.
    */
   async importFountain(params: { title?: string; source: string; ownerUid: string }) {
-    const parsed = parseFountain(params.source);
+    return this.persist(parseFountain(params.source), params);
+  }
+
+  /** Import a screenplay PDF. `data` is base64 so it survives a JSON body. */
+  async importPdf(params: { title?: string; data: string; ownerUid: string }) {
+    const parsed = await this.pdf.parse(Buffer.from(params.data, 'base64'));
+    return this.persist(parsed, { ...params, sourceFormat: 'pdf' });
+  }
+
+  private async persist(
+    parsed: ParsedScript,
+    params: { title?: string; ownerUid: string; sourceFormat?: 'fountain' | 'pdf' },
+  ) {
     const now = Date.now();
     const db = this.fb.db;
 
@@ -48,7 +64,7 @@ export class ProjectsService {
       title: params.title ?? parsed.title ?? 'Untitled Script',
       ownerUid: params.ownerUid,
       memberUids: [params.ownerUid],
-      sourceFormat: 'fountain',
+      sourceFormat: params.sourceFormat ?? 'fountain',
       createdAt: now,
       updatedAt: now,
     });

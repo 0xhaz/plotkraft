@@ -9,6 +9,12 @@ interface ImportBody {
   source: string;
 }
 
+interface ImportPdfBody {
+  title?: string;
+  /** base64-encoded PDF bytes. */
+  data: string;
+}
+
 @Controller('projects')
 @UseGuards(AuthGuard)
 export class ProjectsController {
@@ -21,6 +27,11 @@ export class ProjectsController {
   @Post('import')
   import(@Body() body: ImportBody, @Uid() uid: string) {
     return this.projects.importFountain({ ...body, ownerUid: uid });
+  }
+
+  @Post('import-pdf')
+  importPdf(@Body() body: ImportPdfBody, @Uid() uid: string) {
+    return this.projects.importPdf({ ...body, ownerUid: uid });
   }
 
   @Get(':id')

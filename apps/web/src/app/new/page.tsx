@@ -10,6 +10,7 @@ export default function NewProject() {
   const { user, loading } = useAuth();
   const router = useRouter();
   const [source, setSource] = useState('');
+  const [pdf, setPdf] = useState<{ name: string; data: string } | null>(null);
   const [title, setTitle] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -22,23 +23,43 @@ export default function NewProject() {
   }
 
   async function onFile(file: File) {
+    const stem = file.name.replace(/\.(fountain|txt|pdf)$/i, '');
+    if (!title) setTitle(stem);
+
+    if (file.name.toLowerCase().endsWith('.pdf')) {
+      // Base64 so the PDF survives a JSON body; the API decodes and parses it.
+      const buf = new Uint8Array(await file.arrayBuffer());
+      let binary = '';
+      for (let i = 0; i < buf.length; i += 8192) {
+        binary += String.fromCharCode(...buf.subarray(i, i + 8192));
+      }
+      setPdf({ name: file.name, data: btoa(binary) });
+      setSource('');
+      return;
+    }
+
+    setPdf(null);
     setSource(await file.text());
-    if (!title) setTitle(file.name.replace(/\.(fountain|txt)$/i, ''));
   }
 
   async function importScript() {
-    if (!user || !source.trim()) return;
+    if (!user || (!source.trim() && !pdf)) return;
     setBusy(true);
     setError(null);
     try {
       const token = await user.getIdToken();
-      const res = await fetch(`${API_BASE}/projects/import`, {
+      const res = await fetch(`${API_BASE}/projects/${pdf ? 'import-pdf' : 'import'}`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', Authorization: `Bearer ${token}` },
         // Ownership comes from the verified token, never from this body.
-        body: JSON.stringify({ source, title: title || undefined }),
+        body: JSON.stringify(
+          pdf ? { data: pdf.data, title: title || undefined } : { source, title: title || undefined },
+        ),
       });
-      if (!res.ok) throw new Error(`Import failed (${res.status})`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.message ?? `Import failed (${res.status})`);
+      }
       const { projectId } = await res.json();
       router.push(`/project/${projectId}`);
     } catch (e) {
@@ -84,21 +105,31 @@ export default function NewProject() {
                 style={S.input}
               />
 
-              <label style={S.label}>Script file</label>
+              <label style={S.label}>Script file — Fountain or PDF</label>
               <input
                 type="file"
-                accept=".fountain,.txt"
+                accept=".fountain,.txt,.pdf"
                 onChange={(e) => {
                   const f = e.target.files?.[0];
                   if (f) void onFile(f);
                 }}
                 style={{ ...S.input, padding: 9 }}
               />
+              {pdf && (
+                <p style={S.pdfNote}>
+                  <strong>{pdf.name}</strong> ready. Scenes are read from the page layout —
+                  sluglines, character cues and dialogue are told apart by their indentation.
+                  A scan with no text layer will not parse.
+                </p>
+              )}
 
-              <label style={S.label}>Or paste it</label>
+              <label style={S.label}>{pdf ? 'Or paste Fountain instead' : 'Or paste it'}</label>
               <textarea
                 value={source}
-                onChange={(e) => setSource(e.target.value)}
+                onChange={(e) => {
+                  setSource(e.target.value);
+                  if (e.target.value) setPdf(null);
+                }}
                 placeholder={'INT. NEWSROOM - NIGHT\n\nEmpty desks. MAYA reads the same paragraph for the fourth time.'}
                 rows={12}
                 style={{ ...S.input, fontFamily: 'ui-monospace, monospace', fontSize: 12, lineHeight: 1.55 }}
@@ -108,10 +139,10 @@ export default function NewProject() {
 
               <button
                 onClick={() => void importScript()}
-                disabled={busy || !source.trim()}
-                style={{ ...S.primary, opacity: busy || !source.trim() ? 0.5 : 1 }}
+                disabled={busy || (!source.trim() && !pdf)}
+                style={{ ...S.primary, opacity: busy || (!source.trim() && !pdf) ? 0.5 : 1 }}
               >
-                {busy ? 'Importing…' : 'Import script'}
+                {busy ? 'Importing…' : pdf ? 'Import PDF' : 'Import script'}
               </button>
             </div>
           )}
@@ -142,6 +173,10 @@ const S: Record<string, React.CSSProperties> = {
   sample: {
     background: 'transparent', color: '#7aa2e3', border: '1px dashed #2a3a52',
     borderRadius: 9, padding: '14px 18px', fontSize: 15, cursor: 'pointer',
+  },
+  pdfNote: {
+    color: '#9aa4b2', fontSize: 12.5, lineHeight: 1.6, margin: '10px 0 0',
+    borderLeft: '2px solid #2a3a52', paddingLeft: 12,
   },
   sampleHint: { color: '#6f7986', fontSize: 14, lineHeight: 1.6, margin: '12px 0 0' },
   primary: {
