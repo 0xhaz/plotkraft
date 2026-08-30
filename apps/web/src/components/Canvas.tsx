@@ -7,6 +7,7 @@ import {
   Controls,
   MiniMap,
   useNodesState,
+  ViewportPortal,
   type Node,
   type NodeChange,
   type Edge as FlowEdge,
@@ -14,7 +15,7 @@ import {
 import '@xyflow/react/dist/style.css';
 import { collection, doc, onSnapshot, orderBy, query, updateDoc, writeBatch } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { serpentinePosition } from '@/lib/layout';
+import { serpentinePosition, actLayout, CARD_W, GAP_X, COLUMNS, type ActBand } from '@/lib/layout';
 import { SceneNode, type SceneNodeData } from './SceneNode';
 import { EDGE_STYLE, TransitionEdge } from './TransitionEdge';
 import {
@@ -26,18 +27,12 @@ import {
   type WhatIfImpact,
   type CircleResult,
 } from '@/lib/whatIf';
-import { ScenePanel } from './ScenePanel';
+import { ScenePanel, type SceneDetail } from './ScenePanel';
 import { StoryCircle } from './StoryCircle';
 import { NotesPanel } from './NotesPanel';
 
-interface SceneDoc {
-  id: string;
-  index: number;
-  heading: string;
-  characters: string[];
+interface SceneDoc extends SceneDetail {
   position: { x: number; y: number };
-  loadScore?: number;
-  version: number;
   flagCount?: number;
   noteCount?: number;
 }
@@ -64,6 +59,7 @@ export function Canvas({ projectId }: { projectId: string }) {
   const [circle, setCircle] = useState<CircleResult | null>(null);
   const [accessDenied, setAccessDenied] = useState(false);
   const [notesOpen, setNotesOpen] = useState(false);
+  const [byAct, setByAct] = useState(false);
 
   useEffect(() => {
     setAccessDenied(false);
@@ -179,12 +175,22 @@ export function Canvas({ projectId }: { projectId: string }) {
     [impact],
   );
 
+  /**
+   * Act grouping is a view, not a stored layout: it overrides positions on screen
+   * without writing to Firestore, so switching back restores the writer's own
+   * arrangement of the board rather than destroying it.
+   */
+  const acts = useMemo(
+    () => (byAct ? actLayout(scenes.map((s) => ({ id: s.id, index: s.index, circleStep: s.circleStep }))) : null),
+    [byAct, scenes],
+  );
+
   const derivedNodes: Node<SceneNodeData>[] = useMemo(
     () =>
       scenes.map((s) => ({
         id: s.id,
         type: 'scene',
-        position: s.position ?? { x: 0, y: 0 },
+        position: acts?.positions.get(s.id) ?? s.position ?? { x: 0, y: 0 },
         data: {
           heading: s.heading,
           characters: s.characters ?? [],
@@ -196,7 +202,7 @@ export function Canvas({ projectId }: { projectId: string }) {
           loadDelta: deltaFor.get(s.id),
         },
       })),
-    [scenes, impactFor, selected, deltaFor],
+    [scenes, impactFor, selected, deltaFor, acts],
   );
 
   // React Flow needs to own node state for dragging to do anything. Firestore
@@ -293,11 +299,14 @@ export function Canvas({ projectId }: { projectId: string }) {
         edgeTypes={edgeTypes}
         onNodesChange={onNodesChange}
         onNodeClick={(_, node) => toggleSelected(node.id)}
-        onNodeDragStop={(_, node) => void persistPosition(node.id, node.position)}
-        nodesDraggable
+        onNodeDragStop={(_, node) => {
+          if (!byAct) void persistPosition(node.id, node.position);
+        }}
+        nodesDraggable={!byAct}
         fitView
       >
         <Background color="#2a2f38" gap={20} />
+        {acts && <ActBands bands={acts.bands} />}
         <Controls />
         <MiniMap
           pannable
@@ -326,6 +335,8 @@ export function Canvas({ projectId }: { projectId: string }) {
         onCircle={runCircle}
         onNotes={() => { setNotesOpen(true); setCircle(null); }}
         onTidy={tidy}
+        byAct={byAct}
+        onToggleAct={() => setByAct((v) => !v)}
         onClear={clear}
       />
 
@@ -350,15 +361,57 @@ export function Canvas({ projectId }: { projectId: string }) {
       {detailScene && !circle && !notesOpen && (
         <ScenePanel
           projectId={projectId}
-          sceneId={detailScene.id}
-          heading={detailScene.heading}
-          characters={detailScene.characters ?? []}
-          loadScore={detailScene.loadScore ?? 0}
-          sceneVersion={detailScene.version ?? 1}
+          scene={{
+            ...detailScene,
+            action: detailScene.action ?? '',
+            dialogue: detailScene.dialogue ?? [],
+            characters: detailScene.characters ?? [],
+            version: detailScene.version ?? 1,
+          }}
           onClose={() => setSelected([])}
         />
       )}
     </div>
+  );
+}
+
+/** Labelled regions behind the cards, drawn in canvas coordinates. */
+function ActBands({ bands }: { bands: ActBand[] }) {
+  const width = COLUMNS * (CARD_W + GAP_X) - GAP_X + 48;
+  return (
+    <ViewportPortal>
+      {bands.map((b) => (
+        <div
+          key={b.act}
+          style={{
+            position: 'absolute',
+            transform: `translate(-24px, ${b.y}px)`,
+            width,
+            height: b.height,
+            border: `1px solid ${b.act === 0 ? '#2a2f38' : '#243040'}`,
+            borderRadius: 14,
+            background: b.act === 0 ? '#14161acc' : '#121821cc',
+            pointerEvents: 'none',
+          }}
+        >
+          <div
+            style={{
+              padding: '13px 18px',
+              fontSize: 12.5,
+              fontWeight: 600,
+              letterSpacing: 0.4,
+              color: b.act === 0 ? '#6b7280' : '#7aa2e3',
+              fontFamily: 'ui-sans-serif, system-ui, sans-serif',
+            }}
+          >
+            {b.label}
+            <span style={{ color: '#6b7280', fontWeight: 400 }}>
+              {' '}· {b.sceneIds.length} scene{b.sceneIds.length === 1 ? '' : 's'}
+            </span>
+          </div>
+        </div>
+      ))}
+    </ViewportPortal>
   );
 }
 
@@ -375,6 +428,8 @@ function Inspector(props: {
   onCircle: () => void;
   onNotes: () => void;
   onTidy: () => void;
+  byAct: boolean;
+  onToggleAct: () => void;
   onClear: () => void;
 }) {
   const { impact } = props;
@@ -412,9 +467,21 @@ function Inspector(props: {
         {props.busy === 'research' ? 'Fact-checking…' : 'Run Researcher'}
       </button>
 
-      <button onClick={props.onTidy} disabled={props.busy !== null} style={{ ...P.button, background: '#2a2f38' }}>
-        Tidy layout
-      </button>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button
+          onClick={props.onToggleAct}
+          style={{ ...P.button, background: props.byAct ? '#3b6fd4' : '#2a2f38', flex: 1 }}
+        >
+          {props.byAct ? 'Grouped by act' : 'Group by act'}
+        </button>
+        <button
+          onClick={props.onTidy}
+          disabled={props.busy !== null || props.byAct}
+          style={{ ...P.button, background: '#2a2f38', opacity: props.byAct ? 0.4 : 1 }}
+        >
+          Tidy
+        </button>
+      </div>
 
       <div style={P.hint}>
         {props.selected.length === 0
