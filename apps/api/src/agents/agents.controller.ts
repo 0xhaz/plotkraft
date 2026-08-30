@@ -16,6 +16,7 @@ export class AgentsController {
   status() {
     return {
       gemini: this.gemini.configured,
+      backend: this.gemini.backend,
       parallel: Boolean(process.env.PARALLEL_API_KEY),
     };
   }
