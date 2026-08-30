@@ -61,6 +61,28 @@ These are "therefore":
 - A choice in scene A creates the problem in scene B.
 - Scene A's consequence forces scene B's situation.
 
+WHEN TO PREFER "but" OVER "therefore"
+Both are causal. The difference is direction of fortune, and "but" is the more
+informative label whenever it applies — do not settle for "therefore" if the
+second scene works AGAINST the first.
+Choose "but" when scene B frustrates, denies, reverses, or costs something that
+scene A set up:
+- A asks / attempts / hopes -> B refuses, fails, or does not arrive. -> but
+- A is a victory or relief -> B takes it away. -> but
+- A commits to a plan -> B makes the plan impossible. -> but
+Choose "therefore" only when B follows A's intent WITHOUT opposing it.
+A screenplay with no "but" joints at all is almost certainly mislabelled:
+drama is made of setbacks.
+
+JUDGE THE JOINT, NOT THE SCENE
+The label describes the RELATIONSHIP between two scenes, never the content of
+either one. A dramatic second scene does not make the joint causal.
+- WRONG: "The page going live is complicated by the lawyers' letter."
+  (Both of those happen INSIDE scene B. That says nothing about the joint.)
+- RIGHT: "Nothing in the diner scene causes or complicates the publication." -> and_then
+Your justification MUST mention something from the FIRST scene. If you cannot
+name what in scene A produces scene B, the label is "and_then".
+
 SELF-CHECK — apply before you answer
 If your justification would naturally begin with "After...", "Then...", "Next...",
 "They proceed to...", or "Having done X, they do Y", the honest label is "and_then".
