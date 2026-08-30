@@ -14,7 +14,8 @@ import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { SceneNode, type SceneNodeData } from './SceneNode';
 import { EDGE_STYLE, TransitionEdge } from './TransitionEdge';
-import { simulateCut, runCausality, type WhatIfImpact } from '@/lib/whatIf';
+import { simulateCut, runCausality, runResearch, type WhatIfImpact } from '@/lib/whatIf';
+import { ScenePanel } from './ScenePanel';
 
 interface SceneDoc {
   id: string;
@@ -23,6 +24,8 @@ interface SceneDoc {
   characters: string[];
   position: { x: number; y: number };
   loadScore?: number;
+  version: number;
+  flagCount?: number;
 }
 
 interface EdgeDoc {
@@ -89,6 +92,18 @@ export function Canvas({ projectId }: { projectId: string }) {
     }
   };
 
+  const runResearcher = async () => {
+    setBusy('research');
+    setError(null);
+    try {
+      await runResearch(projectId);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'research failed');
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const clear = () => {
     setSelected([]);
     setImpact(null);
@@ -120,7 +135,7 @@ export function Canvas({ projectId }: { projectId: string }) {
           heading: s.heading,
           characters: s.characters ?? [],
           loadScore: s.loadScore ?? 0,
-          flagCount: 0,
+          flagCount: s.flagCount ?? 0,
           impact: impactFor.get(s.id) ?? null,
           selected: selected.includes(s.id),
           loadDelta: deltaFor.get(s.id),
@@ -128,6 +143,9 @@ export function Canvas({ projectId }: { projectId: string }) {
       })),
     [scenes, impactFor, selected, deltaFor],
   );
+
+  // The detail panel shows a single scene; multi-select is for cut simulation.
+  const detailScene = selected.length === 1 ? scenes.find((s) => s.id === selected[0]) : undefined;
 
   const brokenEdges = useMemo(() => new Set(impact?.brokenEdgeIds ?? []), [impact]);
 
@@ -185,8 +203,21 @@ export function Canvas({ projectId }: { projectId: string }) {
         error={error}
         onWhatIf={runWhatIf}
         onCausality={runStoryLogic}
+        onResearch={runResearcher}
         onClear={clear}
       />
+
+      {detailScene && (
+        <ScenePanel
+          projectId={projectId}
+          sceneId={detailScene.id}
+          heading={detailScene.heading}
+          characters={detailScene.characters ?? []}
+          loadScore={detailScene.loadScore ?? 0}
+          sceneVersion={detailScene.version ?? 1}
+          onClose={() => setSelected([])}
+        />
+      )}
     </div>
   );
 }
@@ -200,6 +231,7 @@ function Inspector(props: {
   error: string | null;
   onWhatIf: () => void;
   onCausality: () => void;
+  onResearch: () => void;
   onClear: () => void;
 }) {
   const { impact } = props;
@@ -211,6 +243,14 @@ function Inspector(props: {
 
       <button onClick={props.onCausality} disabled={props.busy !== null} style={P.button}>
         {props.busy === 'causality' ? 'Analyzing…' : 'Run Story Logic'}
+      </button>
+
+      <button
+        onClick={props.onResearch}
+        disabled={props.busy !== null}
+        style={{ ...P.button, background: '#2f6f5e' }}
+      >
+        {props.busy === 'research' ? 'Fact-checking…' : 'Run Researcher'}
       </button>
 
       <div style={P.hint}>

@@ -36,3 +36,12 @@ export async function agentStatus(projectId: string): Promise<{ gemini: boolean;
   const res = await fetch(`${API_BASE}/projects/${projectId}/agents/status`);
   return res.json();
 }
+
+export async function runResearch(projectId: string): Promise<{ claims: number; flags: number }> {
+  const res = await fetch(`${API_BASE}/projects/${projectId}/agents/research`, { method: 'POST' });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.message ?? `research failed (${res.status})`);
+  }
+  return res.json();
+}

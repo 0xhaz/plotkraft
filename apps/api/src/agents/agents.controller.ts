@@ -2,6 +2,8 @@ import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { CausalityService } from './causality.service';
 import { GeminiService } from './gemini.service';
 import { WhatIfService } from './what-if.service';
+import { ResearcherService } from './researcher.service';
+import { ParallelService } from './parallel.service';
 
 @Controller('projects/:id/agents')
 export class AgentsController {
@@ -9,6 +11,8 @@ export class AgentsController {
     private readonly causality: CausalityService,
     private readonly gemini: GeminiService,
     private readonly whatIf: WhatIfService,
+    private readonly researcher: ResearcherService,
+    private readonly parallelSvc: ParallelService,
   ) {}
 
   /** Which agents can actually run right now — surfaced so the UI never fakes readiness. */
@@ -17,13 +21,18 @@ export class AgentsController {
     return {
       gemini: this.gemini.configured,
       backend: this.gemini.backend,
-      parallel: Boolean(process.env.PARALLEL_API_KEY),
+      parallel: this.parallelSvc.configured,
     };
   }
 
   @Post('causality')
   runCausality(@Param('id') id: string) {
     return this.causality.analyze(id);
+  }
+
+  @Post('research')
+  runResearch(@Param('id') id: string) {
+    return this.researcher.analyze(id);
   }
 
   /** Read-only: simulates a cut without touching the shared canvas. */
