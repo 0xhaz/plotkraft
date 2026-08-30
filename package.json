@@ -1,0 +1,10 @@
+{
+  "name": "plotkraft",
+  "private": true,
+  "packageManager": "pnpm@11.4.2",
+  "scripts": {
+    "dev:web": "pnpm --filter @plotkraft/web dev",
+    "dev:api": "pnpm --filter @plotkraft/api start:dev",
+    "build": "pnpm -r build"
+  }
+}
