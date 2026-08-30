@@ -18,7 +18,10 @@ import {
  * directly, so "the app seems to work" is not evidence they are correct — a rule
  * that is too permissive looks identical from inside the app.
  *
- * Requires the Firestore emulator (pnpm emulators).
+ * Run with `pnpm test:rules`, which starts a DEDICATED emulator on its own port
+ * and tears it down afterwards. That isolation is not cosmetic: these tests call
+ * clearFirestore() between cases, and pointed at the development emulator they
+ * delete whatever project you were working on.
  */
 const PROJECT_ID = 'plotkraft-rules-test';
 const OWNER = 'writer-uid';
@@ -34,7 +37,7 @@ beforeAll(async () => {
     projectId: PROJECT_ID,
     firestore: {
       host: '127.0.0.1',
-      port: 8181,
+      port: Number(process.env.FIRESTORE_EMULATOR_PORT ?? 8182),
       rules: readFileSync(join(__dirname, '../../../../firestore.rules'), 'utf8'),
     },
   });

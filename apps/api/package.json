@@ -8,7 +8,7 @@
     "start:dev": "nest start --watch",
     "start:prod": "node dist/main",
     "test": "vitest run",
-    "test:rules": "vitest run --config vitest.rules.config.ts"
+    "test:rules": "JAVA_HOME=/opt/homebrew/opt/openjdk@21 PATH=/opt/homebrew/opt/openjdk@21/bin:$PATH firebase emulators:exec --only firestore --config ../../firebase.rules-test.json --project plotkraft-rules-test \"vitest run --config vitest.rules.config.ts\""
   },
   "dependencies": {
     "@google/genai": "^1.0.0",

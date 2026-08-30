@@ -4,10 +4,11 @@
   "packageManager": "pnpm@9.12.2",
   "scripts": {
     "emulators": "./scripts/emulators.sh",
-    "dev:api": "PORT=8088 FIRESTORE_EMULATOR_HOST=127.0.0.1:8181 GCP_PROJECT_ID=plotkraft-agentic pnpm --filter @plotkraft/api start:dev",
+    "dev:api": "PORT=8088 FIRESTORE_EMULATOR_HOST=127.0.0.1:8181 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 GCP_PROJECT_ID=plotkraft-agentic GCP_LOCATION=us-central1 pnpm --filter @plotkraft/api start:dev",
     "dev:web": "pnpm --filter @plotkraft/web dev -p 3001",
     "build": "pnpm -r build",
     "test": "pnpm --filter @plotkraft/api test",
-    "test:rules": "pnpm --filter @plotkraft/api test:rules"
+    "test:rules": "pnpm --filter @plotkraft/api test:rules",
+    "seed:demo": "node scripts/seed-demo.mjs"
   }
 }

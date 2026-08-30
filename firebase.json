@@ -9,6 +9,7 @@
     "storage": { "port": 9199 },
     "ui": { "enabled": true, "port": 4001 },
     "hub": { "port": 4401 },
-    "singleProjectMode": true
+    "_comment": "singleProjectMode is off: it makes the rules tests share a datastore with local dev data, so clearFirestore() in the test suite wipes the project you are working on.",
+    "singleProjectMode": false
   }
 }
