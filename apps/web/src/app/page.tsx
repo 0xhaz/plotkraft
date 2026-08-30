@@ -23,10 +23,15 @@ export default function Home() {
     setBusy(true);
     setError(null);
     try {
+      const token = await user.getIdToken();
       const res = await fetch(`${API_BASE}/projects/import`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ source, title: title || undefined, ownerUid: user.uid }),
+        headers: {
+          'content-type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        // No ownerUid: the API takes ownership from the verified token.
+        body: JSON.stringify({ source, title: title || undefined }),
       });
       if (!res.ok) throw new Error(`Import failed (${res.status})`);
       const { projectId } = await res.json();

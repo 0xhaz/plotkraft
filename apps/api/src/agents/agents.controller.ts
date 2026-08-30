@@ -1,4 +1,7 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { AuthGuard } from '../auth/auth.guard';
+import { Uid } from '../auth/uid.decorator';
+import { MembershipService } from '../auth/membership.service';
 import { CausalityService } from './causality.service';
 import { GeminiService } from './gemini.service';
 import { WhatIfService } from './what-if.service';
@@ -9,6 +12,7 @@ import { NotesService } from './notes.service';
 import type { NoteSource } from './notes';
 
 @Controller('projects/:id/agents')
+@UseGuards(AuthGuard)
 export class AgentsController {
   constructor(
     private readonly causality: CausalityService,
@@ -18,11 +22,12 @@ export class AgentsController {
     private readonly parallelSvc: ParallelService,
     private readonly circle: StoryCircleService,
     private readonly notes: NotesService,
+    private readonly membership: MembershipService,
   ) {}
 
   /** Which agents can actually run right now — surfaced so the UI never fakes readiness. */
   @Get('status')
-  status() {
+  status(@Param('id') _id: string) {
     return {
       gemini: this.gemini.configured,
       backend: this.gemini.backend,
@@ -31,37 +36,48 @@ export class AgentsController {
   }
 
   @Post('causality')
-  runCausality(@Param('id') id: string) {
+  async runCausality(@Param('id') id: string, @Uid() uid: string) {
+    await this.membership.assertMember(id, uid);
     return this.causality.analyze(id);
   }
 
   @Post('story-circle')
-  runCircle(@Param('id') id: string) {
+  async runCircle(@Param('id') id: string, @Uid() uid: string) {
+    await this.membership.assertMember(id, uid);
     return this.circle.analyze(id);
   }
 
   /** Paste a batch of notes from one sender; splitting happens in the agent pass. */
   @Post('notes')
-  addNotes(
+  async addNotes(
     @Param('id') id: string,
     @Body() body: { source: NoteSource; author: string; body: string },
+    @Uid() uid: string,
   ) {
+    await this.membership.assertMember(id, uid);
     return this.notes.ingest(id, body);
   }
 
   @Post('notes/reconcile')
-  reconcileNotes(@Param('id') id: string) {
+  async reconcileNotes(@Param('id') id: string, @Uid() uid: string) {
+    await this.membership.assertMember(id, uid);
     return this.notes.reconcile(id);
   }
 
   @Post('research')
-  runResearch(@Param('id') id: string) {
+  async runResearch(@Param('id') id: string, @Uid() uid: string) {
+    await this.membership.assertMember(id, uid);
     return this.researcher.analyze(id);
   }
 
   /** Read-only: simulates a cut without touching the shared canvas. */
   @Post('what-if')
-  runWhatIf(@Param('id') id: string, @Body() body: { removedSceneIds: string[] }) {
+  async runWhatIf(
+    @Param('id') id: string,
+    @Body() body: { removedSceneIds: string[] },
+    @Uid() uid: string,
+  ) {
+    await this.membership.assertMember(id, uid);
     return this.whatIf.simulate(id, body.removedSceneIds ?? []);
   }
 }

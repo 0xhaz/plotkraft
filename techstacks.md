@@ -53,8 +53,15 @@ API notes for the build:
 ### 4.2 Orchestrator — DECIDED: plain `@google/genai` function calling (not ADK)
 `@google/adk` v2.0.0 (official ADK JS) is real and actively maintained, but carries MikroORM + full OpenTelemetry + A2A deps, wraps `@google/genai` underneath, and its session/runner abstractions are learning-curve risk on an 8-day build. `google-genai` is equally on the accepted-SDK list; our state lives in Firestore regardless.
 
-### 4.3 Auth — DECIDED: Firebase Auth (Google provider), Clerk deferred
+### 4.3 Auth — DECIDED: Firebase Auth (Google provider), Clerk deferred (re-confirmed Aug 31)
 Native fit with Firestore/RTDB security rules (`request.auth.uid`) — the live canvas listeners and presence markers depend on Firebase tokens. Clerk would require a Clerk→Firebase custom-token exchange (two auth systems, token expiry skew); its real payoff — orgs, invites, member management — exceeds our shareable-project-link scope. ~30 min to implement: `signInWithPopup`, one button. Revisit Clerk post-hackathon if Plotkraft needs teams/SSO.
+
+**Re-confirmed Aug 31.** Clerk remains viable and is compliance-safe (the AI-vendor restriction covers models, not auth providers). Two migration paths if it is ever wanted: **bridge** (~2–3h — Clerk owns sign-in, the API mints a Firebase custom token so rules and live listeners keep working), or **API-side authz** (~1–2 days — cleanest conceptually, but the browser stops reading Firestore directly, which costs the live canvas and discards `firestore.rules`). Neither is worth doing before the deadline; auth is not a judging criterion.
+
+**Security model, now verified end-to-end rather than assumed:**
+- Every API route sits behind `AuthGuard`, which verifies a Firebase ID token. Project-scoped routes additionally assert membership — agent routes especially, since each call spends Vertex and Parallel credit.
+- Ownership is derived from the verified token. The import endpoint previously trusted an `ownerUid` field in the request body, which let any caller create a project as anyone.
+- `firestore.rules` is covered by 15 emulator tests (`pnpm test:rules`): non-members denied, the scene `version` guard, append-only annotations, and the agent lane (a client may record a verdict on a flag but never author or rewrite one).
 
 ## 5. Budgets & credits
 

@@ -7,6 +7,7 @@
     "dev:api": "PORT=8088 FIRESTORE_EMULATOR_HOST=127.0.0.1:8181 GCP_PROJECT_ID=plotkraft-agentic pnpm --filter @plotkraft/api start:dev",
     "dev:web": "pnpm --filter @plotkraft/web dev -p 3001",
     "build": "pnpm -r build",
-    "test": "pnpm --filter @plotkraft/api test"
+    "test": "pnpm --filter @plotkraft/api test",
+    "test:rules": "pnpm --filter @plotkraft/api test:rules"
   }
 }

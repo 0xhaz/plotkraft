@@ -1,6 +1,24 @@
 'use client';
 
-import { API_BASE } from './firebase';
+import { API_BASE, auth } from './firebase';
+
+/**
+ * Every API call carries the caller's Firebase ID token. The API verifies it and
+ * derives identity from it — the client never asserts who it is.
+ */
+async function authedFetch(url: string, init: RequestInit = {}): Promise<Response> {
+  const user = auth().currentUser;
+  if (!user) throw new Error('Not signed in');
+  const token = await user.getIdToken();
+
+  return fetch(url, {
+    ...init,
+    headers: {
+      ...(init.headers ?? {}),
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
 
 export interface WhatIfImpact {
   dirtySceneIds: string[];
@@ -14,7 +32,7 @@ export async function simulateCut(
   projectId: string,
   removedSceneIds: string[],
 ): Promise<WhatIfImpact> {
-  const res = await fetch(`${API_BASE}/projects/${projectId}/agents/what-if`, {
+  const res = await authedFetch(`${API_BASE}/projects/${projectId}/agents/what-if`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ removedSceneIds }),
@@ -24,7 +42,7 @@ export async function simulateCut(
 }
 
 export async function runCausality(projectId: string): Promise<{ edges: number; scenes: number }> {
-  const res = await fetch(`${API_BASE}/projects/${projectId}/agents/causality`, { method: 'POST' });
+  const res = await authedFetch(`${API_BASE}/projects/${projectId}/agents/causality`, { method: 'POST' });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.message ?? `causality failed (${res.status})`);
@@ -33,12 +51,12 @@ export async function runCausality(projectId: string): Promise<{ edges: number; 
 }
 
 export async function agentStatus(projectId: string): Promise<{ gemini: boolean; parallel: boolean }> {
-  const res = await fetch(`${API_BASE}/projects/${projectId}/agents/status`);
+  const res = await authedFetch(`${API_BASE}/projects/${projectId}/agents/status`);
   return res.json();
 }
 
 export async function runResearch(projectId: string): Promise<{ claims: number; flags: number }> {
-  const res = await fetch(`${API_BASE}/projects/${projectId}/agents/research`, { method: 'POST' });
+  const res = await authedFetch(`${API_BASE}/projects/${projectId}/agents/research`, { method: 'POST' });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.message ?? `research failed (${res.status})`);
@@ -55,7 +73,7 @@ export interface CircleResult {
 }
 
 export async function runStoryCircle(projectId: string): Promise<CircleResult> {
-  const res = await fetch(`${API_BASE}/projects/${projectId}/agents/story-circle`, {
+  const res = await authedFetch(`${API_BASE}/projects/${projectId}/agents/story-circle`, {
     method: 'POST',
   });
   if (!res.ok) {
@@ -68,7 +86,7 @@ export async function runStoryCircle(projectId: string): Promise<CircleResult> {
 export async function reconcileNotes(
   projectId: string,
 ): Promise<{ notes: number; conflicts: number; unmapped: number }> {
-  const res = await fetch(`${API_BASE}/projects/${projectId}/agents/notes/reconcile`, {
+  const res = await authedFetch(`${API_BASE}/projects/${projectId}/agents/notes/reconcile`, {
     method: 'POST',
   });
   if (!res.ok) {

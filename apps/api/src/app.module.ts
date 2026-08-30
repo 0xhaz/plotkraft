@@ -5,6 +5,7 @@ import { HealthController } from './health.controller';
 import { FirebaseModule } from './firebase/firebase.module';
 import { ProjectsModule } from './projects/projects.module';
 import { AgentsModule } from './agents/agents.module';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
   imports: [ConfigModule.forRoot({
@@ -12,7 +13,7 @@ import { AgentsModule } from './agents/agents.module';
       // Resolve relative to the compiled bundle, so the API picks up its own
       // .env whether it is started from the package or the workspace root.
       envFilePath: [join(__dirname, '..', '.env')],
-    }), FirebaseModule, ProjectsModule, AgentsModule],
+    }), FirebaseModule, AuthModule, ProjectsModule, AgentsModule],
   controllers: [HealthController],
 })
 export class AppModule {}
