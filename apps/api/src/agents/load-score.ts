@@ -16,7 +16,7 @@ export interface GraphEdge {
  *
  * A scene scoring 0 has nothing downstream depending on it: the cut candidate.
  */
-export function computeLoadScores(
+export function computeRawLoad(
   sceneIds: string[],
   edges: GraphEdge[],
 ): Map<string, number> {
@@ -51,11 +51,28 @@ export function computeLoadScores(
 
   const raw = new Map<string, number>();
   for (const id of sceneIds) raw.set(id, descendants(id, new Set()).size);
+  return raw;
+}
 
-  const max = Math.max(0, ...raw.values());
+/**
+ * Normalized 0..1 load scores.
+ *
+ * `denominator` exists for before/after comparison: when simulating a cut, both
+ * sides must be scaled by the SAME value. Renormalizing the "after" graph on its
+ * own makes surviving scenes appear to gain load simply because the maximum
+ * shrank — which would tell the writer the opposite of the truth.
+ */
+export function computeLoadScores(
+  sceneIds: string[],
+  edges: GraphEdge[],
+  denominator?: number,
+): Map<string, number> {
+  const raw = computeRawLoad(sceneIds, edges);
+  const max = denominator ?? Math.max(0, ...raw.values());
+
   const scores = new Map<string, number>();
   for (const id of sceneIds) {
-    scores.set(id, max === 0 ? 0 : Number(((raw.get(id) ?? 0) / max).toFixed(3)));
+    scores.set(id, max <= 0 ? 0 : Number(((raw.get(id) ?? 0) / max).toFixed(3)));
   }
   return scores;
 }
