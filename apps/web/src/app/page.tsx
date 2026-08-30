@@ -1,69 +1,117 @@
-import Image from "next/image";
+'use client';
+
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/lib/useAuth';
+import { API_BASE } from '@/lib/firebase';
 
 export default function Home() {
+  const { user, loading, signIn, signOutUser } = useAuth();
+  const router = useRouter();
+  const [source, setSource] = useState('');
+  const [title, setTitle] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function onFile(file: File) {
+    setSource(await file.text());
+    if (!title) setTitle(file.name.replace(/\.(fountain|txt)$/i, ''));
+  }
+
+  async function importScript() {
+    if (!user || !source.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`${API_BASE}/projects/import`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ source, title: title || undefined, ownerUid: user.uid }),
+      });
+      if (!res.ok) throw new Error(`Import failed (${res.status})`);
+      const { projectId } = await res.json();
+      router.push(`/project/${projectId}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Import failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (loading) return <main style={S.main}><p style={S.muted}>Loading…</p></main>;
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
+    <main style={S.main}>
+      <div style={{ width: '100%', maxWidth: 720 }}>
+        <h1 style={S.h1}>Plotkraft</h1>
+        <p style={S.tagline}>
+          A writers&apos; room canvas where human notes and AI agents annotate the same beat sheet.
+        </p>
+
+        {!user ? (
+          <button onClick={() => void signIn()} style={S.primary}>
+            Sign in with Google
+          </button>
+        ) : (
+          <>
+            <div style={S.userRow}>
+              <span style={S.muted}>{user.email ?? user.uid}</span>
+              <button onClick={() => void signOutUser()} style={S.link}>Sign out</button>
+            </div>
+
+            <label style={S.label}>Title</label>
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Untitled Script"
+              style={S.input}
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+
+            <label style={S.label}>Fountain script</label>
+            <input
+              type="file"
+              accept=".fountain,.txt"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) void onFile(f); }}
+              style={{ ...S.input, padding: 8 }}
+            />
+            <textarea
+              value={source}
+              onChange={(e) => setSource(e.target.value)}
+              placeholder="…or paste your script here"
+              rows={10}
+              style={{ ...S.input, fontFamily: 'ui-monospace, monospace', fontSize: 12 }}
+            />
+
+            {error && <p style={{ color: '#e07070', fontSize: 13 }}>{error}</p>}
+
+            <button onClick={() => void importScript()} disabled={busy || !source.trim()} style={S.primary}>
+              {busy ? 'Importing…' : 'Import script'}
+            </button>
+          </>
+        )}
+      </div>
+    </main>
   );
 }
+
+const S: Record<string, React.CSSProperties> = {
+  main: {
+    minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+    background: '#0f1216', color: '#e8eaed', padding: 32,
+    fontFamily: 'ui-sans-serif, system-ui, -apple-system, sans-serif',
+  },
+  h1: { fontSize: 34, fontWeight: 700, margin: 0, letterSpacing: -0.5 },
+  tagline: { color: '#9aa4b2', marginTop: 8, marginBottom: 28, lineHeight: 1.5 },
+  label: { display: 'block', fontSize: 12, color: '#9aa4b2', marginTop: 16, marginBottom: 6 },
+  input: {
+    width: '100%', background: '#171a1f', border: '1px solid #2a2f38', borderRadius: 8,
+    padding: '10px 12px', color: '#e8eaed', fontSize: 14, boxSizing: 'border-box',
+  },
+  primary: {
+    marginTop: 20, background: '#3b6fd4', color: '#fff', border: 'none', borderRadius: 8,
+    padding: '11px 18px', fontSize: 14, fontWeight: 600, cursor: 'pointer',
+  },
+  link: { background: 'none', border: 'none', color: '#7aa2e3', cursor: 'pointer', fontSize: 13 },
+  muted: { color: '#9aa4b2', fontSize: 13 },
+  userRow: { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 },
+};
