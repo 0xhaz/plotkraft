@@ -64,3 +64,16 @@ export async function runStoryCircle(projectId: string): Promise<CircleResult> {
   }
   return res.json();
 }
+
+export async function reconcileNotes(
+  projectId: string,
+): Promise<{ notes: number; conflicts: number; unmapped: number }> {
+  const res = await fetch(`${API_BASE}/projects/${projectId}/agents/notes/reconcile`, {
+    method: 'POST',
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.message ?? `reconcile failed (${res.status})`);
+  }
+  return res.json();
+}

@@ -5,6 +5,8 @@ import { WhatIfService } from './what-if.service';
 import { ResearcherService } from './researcher.service';
 import { ParallelService } from './parallel.service';
 import { StoryCircleService } from './story-circle.service';
+import { NotesService } from './notes.service';
+import type { NoteSource } from './notes';
 
 @Controller('projects/:id/agents')
 export class AgentsController {
@@ -15,6 +17,7 @@ export class AgentsController {
     private readonly researcher: ResearcherService,
     private readonly parallelSvc: ParallelService,
     private readonly circle: StoryCircleService,
+    private readonly notes: NotesService,
   ) {}
 
   /** Which agents can actually run right now — surfaced so the UI never fakes readiness. */
@@ -35,6 +38,20 @@ export class AgentsController {
   @Post('story-circle')
   runCircle(@Param('id') id: string) {
     return this.circle.analyze(id);
+  }
+
+  /** Paste a batch of notes from one sender; splitting happens in the agent pass. */
+  @Post('notes')
+  addNotes(
+    @Param('id') id: string,
+    @Body() body: { source: NoteSource; author: string; body: string },
+  ) {
+    return this.notes.ingest(id, body);
+  }
+
+  @Post('notes/reconcile')
+  reconcileNotes(@Param('id') id: string) {
+    return this.notes.reconcile(id);
   }
 
   @Post('research')

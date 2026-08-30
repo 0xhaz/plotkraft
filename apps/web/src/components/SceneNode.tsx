@@ -8,6 +8,7 @@ export interface SceneNodeData extends Record<string, unknown> {
   /** 0..1 graph centrality — drives the card's visual weight. */
   loadScore: number;
   flagCount: number;
+  noteCount?: number;
   /** What-if state: how this scene is affected by the simulated cut. */
   impact?: 'cut' | 'orphaned' | 'dirty' | null;
   selected?: boolean;
@@ -65,8 +66,15 @@ export function SceneNode({ data }: NodeProps) {
             load {d.loadDelta.before} → {d.loadDelta.after}
           </span>
         )}
-        {!d.loadDelta && d.flagCount > 0 && (
-          <span style={{ marginLeft: 'auto', color: '#e0a252' }}>{d.flagCount} flag{d.flagCount === 1 ? '' : 's'}</span>
+        {!d.loadDelta && (d.flagCount > 0 || (d.noteCount ?? 0) > 0) && (
+          <span style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+            {d.flagCount > 0 && (
+              <span style={{ color: '#e0a252' }}>{d.flagCount} flag{d.flagCount === 1 ? '' : 's'}</span>
+            )}
+            {(d.noteCount ?? 0) > 0 && (
+              <span style={{ color: '#c98a4a' }}>{d.noteCount} note{d.noteCount === 1 ? '' : 's'}</span>
+            )}
+          </span>
         )}
       </div>
       <Handle type="source" position={Position.Right} />

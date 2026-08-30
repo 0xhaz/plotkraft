@@ -19,11 +19,13 @@ import {
   runCausality,
   runResearch,
   runStoryCircle,
+  reconcileNotes,
   type WhatIfImpact,
   type CircleResult,
 } from '@/lib/whatIf';
 import { ScenePanel } from './ScenePanel';
 import { StoryCircle } from './StoryCircle';
+import { NotesPanel } from './NotesPanel';
 
 interface SceneDoc {
   id: string;
@@ -34,6 +36,7 @@ interface SceneDoc {
   loadScore?: number;
   version: number;
   flagCount?: number;
+  noteCount?: number;
 }
 
 interface EdgeDoc {
@@ -56,6 +59,7 @@ export function Canvas({ projectId }: { projectId: string }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [circle, setCircle] = useState<CircleResult | null>(null);
+  const [notesOpen, setNotesOpen] = useState(false);
 
   useEffect(() => {
     const unsubScenes = onSnapshot(
@@ -125,6 +129,18 @@ export function Canvas({ projectId }: { projectId: string }) {
     }
   };
 
+  const runReconcile = async () => {
+    setBusy('notes');
+    setError(null);
+    try {
+      await reconcileNotes(projectId);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'reconcile failed');
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const clear = () => {
     setSelected([]);
     setImpact(null);
@@ -157,6 +173,7 @@ export function Canvas({ projectId }: { projectId: string }) {
           characters: s.characters ?? [],
           loadScore: s.loadScore ?? 0,
           flagCount: s.flagCount ?? 0,
+          noteCount: s.noteCount ?? 0,
           impact: impactFor.get(s.id) ?? null,
           selected: selected.includes(s.id),
           loadDelta: deltaFor.get(s.id),
@@ -226,10 +243,20 @@ export function Canvas({ projectId }: { projectId: string }) {
         onCausality={runStoryLogic}
         onResearch={runResearcher}
         onCircle={runCircle}
+        onNotes={() => { setNotesOpen(true); setCircle(null); }}
         onClear={clear}
       />
 
-      {circle && (
+      {notesOpen && (
+        <NotesPanel
+          projectId={projectId}
+          busy={busy === 'notes'}
+          onReconcile={runReconcile}
+          onClose={() => setNotesOpen(false)}
+        />
+      )}
+
+      {circle && !notesOpen && (
         <StoryCircle
           shares={circle.shares}
           diagnostics={circle.diagnostics}
@@ -238,7 +265,7 @@ export function Canvas({ projectId }: { projectId: string }) {
         />
       )}
 
-      {detailScene && !circle && (
+      {detailScene && !circle && !notesOpen && (
         <ScenePanel
           projectId={projectId}
           sceneId={detailScene.id}
@@ -264,6 +291,7 @@ function Inspector(props: {
   onCausality: () => void;
   onResearch: () => void;
   onCircle: () => void;
+  onNotes: () => void;
   onClear: () => void;
 }) {
   const { impact } = props;
@@ -283,6 +311,14 @@ function Inspector(props: {
         style={{ ...P.button, background: '#5a4bbf' }}
       >
         {props.busy === 'circle' ? 'Mapping…' : 'Run Story Circle'}
+      </button>
+
+      <button
+        onClick={props.onNotes}
+        disabled={props.busy !== null}
+        style={{ ...P.button, background: '#b06a2f' }}
+      >
+        Notes &amp; conflicts
       </button>
 
       <button
