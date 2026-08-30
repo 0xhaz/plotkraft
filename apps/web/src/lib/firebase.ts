@@ -4,7 +4,8 @@ import { initializeApp, getApps, type FirebaseApp } from 'firebase/app';
 import { getAuth, connectAuthEmulator, GoogleAuthProvider, type Auth } from 'firebase/auth';
 import { getFirestore, connectFirestoreEmulator, type Firestore } from 'firebase/firestore';
 
-const useEmulators = process.env.NEXT_PUBLIC_USE_EMULATORS === 'true';
+export const USE_EMULATORS = process.env.NEXT_PUBLIC_USE_EMULATORS === 'true';
+const useEmulators = USE_EMULATORS;
 
 const config = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY ?? 'demo-key',
