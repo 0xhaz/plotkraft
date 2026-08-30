@@ -45,3 +45,22 @@ export async function runResearch(projectId: string): Promise<{ claims: number; 
   }
   return res.json();
 }
+
+export interface CircleResult {
+  assigned: number;
+  shares: Record<string, number>;
+  goThreshold: number | null;
+  returnThreshold: number | null;
+  diagnostics: { kind: string; severity: string; step?: number; message: string }[];
+}
+
+export async function runStoryCircle(projectId: string): Promise<CircleResult> {
+  const res = await fetch(`${API_BASE}/projects/${projectId}/agents/story-circle`, {
+    method: 'POST',
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.message ?? `story circle failed (${res.status})`);
+  }
+  return res.json();
+}

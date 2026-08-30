@@ -4,6 +4,7 @@ import { GeminiService } from './gemini.service';
 import { WhatIfService } from './what-if.service';
 import { ResearcherService } from './researcher.service';
 import { ParallelService } from './parallel.service';
+import { StoryCircleService } from './story-circle.service';
 
 @Controller('projects/:id/agents')
 export class AgentsController {
@@ -13,6 +14,7 @@ export class AgentsController {
     private readonly whatIf: WhatIfService,
     private readonly researcher: ResearcherService,
     private readonly parallelSvc: ParallelService,
+    private readonly circle: StoryCircleService,
   ) {}
 
   /** Which agents can actually run right now — surfaced so the UI never fakes readiness. */
@@ -28,6 +30,11 @@ export class AgentsController {
   @Post('causality')
   runCausality(@Param('id') id: string) {
     return this.causality.analyze(id);
+  }
+
+  @Post('story-circle')
+  runCircle(@Param('id') id: string) {
+    return this.circle.analyze(id);
   }
 
   @Post('research')

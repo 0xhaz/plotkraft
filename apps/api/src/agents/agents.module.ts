@@ -5,10 +5,11 @@ import { GeminiService } from './gemini.service';
 import { WhatIfService } from './what-if.service';
 import { ResearcherService } from './researcher.service';
 import { ParallelService } from './parallel.service';
+import { StoryCircleService } from './story-circle.service';
 
 @Module({
   controllers: [AgentsController],
-  providers: [GeminiService, CausalityService, WhatIfService, ParallelService, ResearcherService],
-  exports: [GeminiService, CausalityService, WhatIfService, ParallelService, ResearcherService],
+  providers: [GeminiService, CausalityService, WhatIfService, ParallelService, ResearcherService, StoryCircleService],
+  exports: [GeminiService, CausalityService, WhatIfService, ParallelService, ResearcherService, StoryCircleService],
 })
 export class AgentsModule {}

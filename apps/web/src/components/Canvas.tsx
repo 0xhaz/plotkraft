@@ -14,8 +14,16 @@ import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { SceneNode, type SceneNodeData } from './SceneNode';
 import { EDGE_STYLE, TransitionEdge } from './TransitionEdge';
-import { simulateCut, runCausality, runResearch, type WhatIfImpact } from '@/lib/whatIf';
+import {
+  simulateCut,
+  runCausality,
+  runResearch,
+  runStoryCircle,
+  type WhatIfImpact,
+  type CircleResult,
+} from '@/lib/whatIf';
 import { ScenePanel } from './ScenePanel';
+import { StoryCircle } from './StoryCircle';
 
 interface SceneDoc {
   id: string;
@@ -47,6 +55,7 @@ export function Canvas({ projectId }: { projectId: string }) {
   const [impact, setImpact] = useState<WhatIfImpact | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [circle, setCircle] = useState<CircleResult | null>(null);
 
   useEffect(() => {
     const unsubScenes = onSnapshot(
@@ -99,6 +108,18 @@ export function Canvas({ projectId }: { projectId: string }) {
       await runResearch(projectId);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'research failed');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const runCircle = async () => {
+    setBusy('circle');
+    setError(null);
+    try {
+      setCircle(await runStoryCircle(projectId));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'story circle failed');
     } finally {
       setBusy(null);
     }
@@ -204,10 +225,20 @@ export function Canvas({ projectId }: { projectId: string }) {
         onWhatIf={runWhatIf}
         onCausality={runStoryLogic}
         onResearch={runResearcher}
+        onCircle={runCircle}
         onClear={clear}
       />
 
-      {detailScene && (
+      {circle && (
+        <StoryCircle
+          shares={circle.shares}
+          diagnostics={circle.diagnostics}
+          goThreshold={circle.goThreshold}
+          onClose={() => setCircle(null)}
+        />
+      )}
+
+      {detailScene && !circle && (
         <ScenePanel
           projectId={projectId}
           sceneId={detailScene.id}
@@ -232,6 +263,7 @@ function Inspector(props: {
   onWhatIf: () => void;
   onCausality: () => void;
   onResearch: () => void;
+  onCircle: () => void;
   onClear: () => void;
 }) {
   const { impact } = props;
@@ -243,6 +275,14 @@ function Inspector(props: {
 
       <button onClick={props.onCausality} disabled={props.busy !== null} style={P.button}>
         {props.busy === 'causality' ? 'Analyzing…' : 'Run Story Logic'}
+      </button>
+
+      <button
+        onClick={props.onCircle}
+        disabled={props.busy !== null}
+        style={{ ...P.button, background: '#5a4bbf' }}
+      >
+        {props.busy === 'circle' ? 'Mapping…' : 'Run Story Circle'}
       </button>
 
       <button
