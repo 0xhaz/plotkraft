@@ -1,0 +1,81 @@
+rules_version = '2';
+
+// Plotkraft data model — see architecture.md §4 and workplan.md §4.
+// Two invariants encoded here:
+//   1. Append-only collections (annotations, flags) — create yes, mutate no.
+//      This is what makes simultaneous commenting conflict-free by construction.
+//   2. Agents own their own lane — agent output (flags) is written server-side by
+//      the Admin SDK, which bypasses these rules. Clients may never create a flag,
+//      only record their accept/dismiss verdict on one.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isMember(projectId) {
+      return signedIn() &&
+        request.auth.uid in get(/databases/$(database)/documents/projects/$(projectId)).data.memberUids;
+    }
+
+    // Only the listed fields changed in this write.
+    function onlyChanged(fields) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(fields);
+    }
+
+    match /projects/{projectId} {
+      allow read: if isMember(projectId);
+      allow create: if signedIn() && request.auth.uid in request.resource.data.memberUids;
+      allow update: if isMember(projectId);
+      allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
+
+      match /scenes/{sceneId} {
+        allow read: if isMember(projectId);
+        allow create, delete: if isMember(projectId);
+        // Version guard: a client may only advance `version` by exactly one.
+        // Stale writes are rejected loudly rather than silently overwriting.
+        allow update: if isMember(projectId) &&
+          request.resource.data.version == resource.data.version + 1;
+
+        // Append-only. No update, no delete — a comment, once made, is history.
+        match /annotations/{annotationId} {
+          allow read: if isMember(projectId);
+          allow create: if isMember(projectId) &&
+            request.resource.data.authorUid == request.auth.uid;
+        }
+
+        // Agent-authored. Clients never create or delete; they may only set the
+        // human verdict (accept / dismiss / disagree) on an existing flag.
+        match /flags/{flagId} {
+          allow read: if isMember(projectId);
+          allow update: if isMember(projectId) &&
+            onlyChanged(['verdict', 'verdictBy', 'verdictAt']);
+        }
+      }
+
+      match /edges/{edgeId} {
+        allow read: if isMember(projectId);
+        allow create, update, delete: if isMember(projectId);
+      }
+
+      match /notes/{noteId} {
+        allow read: if isMember(projectId);
+        allow create, update, delete: if isMember(projectId);
+      }
+
+      // Bible facts and suppression rules are agent-maintained (server-side).
+      match /bible/{factId} {
+        allow read: if isMember(projectId);
+      }
+      match /suppressions/{ruleId} {
+        allow read: if isMember(projectId);
+        allow create, delete: if isMember(projectId);
+      }
+      match /snapshots/{snapshotId} {
+        allow read: if isMember(projectId);
+        allow create: if isMember(projectId);
+      }
+    }
+  }
+}
