@@ -167,6 +167,32 @@ describe('moving a card', () => {
   });
 });
 
+describe('draft status', () => {
+  it('allows a status change with no version bump', async () => {
+    await assertSucceeds(
+      updateDoc(doc(asMember(), 'projects', PID, 'scenes', SID), {
+        status: 'confirmed',
+        statusAt: Date.now(),
+      }),
+    );
+  });
+
+  it('still refuses prose smuggled in beside a status change', async () => {
+    await assertFails(
+      updateDoc(doc(asMember(), 'projects', PID, 'scenes', SID), {
+        status: 'confirmed',
+        action: 'rewritten without a version bump',
+      }),
+    );
+  });
+
+  it('denies a non-member setting status', async () => {
+    await assertFails(
+      updateDoc(doc(asStranger(), 'projects', PID, 'scenes', SID), { status: 'confirmed' }),
+    );
+  });
+});
+
 describe('annotations are append-only', () => {
   it('lets a member add their own annotation', async () => {
     await assertSucceeds(

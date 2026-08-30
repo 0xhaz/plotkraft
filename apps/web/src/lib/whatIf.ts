@@ -95,3 +95,16 @@ export async function reconcileNotes(
   }
   return res.json();
 }
+
+export async function runCraftAnalysis(
+  projectId: string,
+): Promise<{ scenes: number; lessons: number }> {
+  const res = await authedFetch(`${API_BASE}/projects/${projectId}/agents/craft`, {
+    method: 'POST',
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.message ?? `craft analysis failed (${res.status})`);
+  }
+  return res.json();
+}

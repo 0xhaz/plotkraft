@@ -11,6 +11,7 @@ export default function NewProject() {
   const router = useRouter();
   const [source, setSource] = useState('');
   const [pdf, setPdf] = useState<{ name: string; data: string } | null>(null);
+  const [mode, setMode] = useState<'original' | 'reference'>('original');
   const [title, setTitle] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -53,7 +54,9 @@ export default function NewProject() {
         headers: { 'content-type': 'application/json', Authorization: `Bearer ${token}` },
         // Ownership comes from the verified token, never from this body.
         body: JSON.stringify(
-          pdf ? { data: pdf.data, title: title || undefined } : { source, title: title || undefined },
+          pdf
+            ? { data: pdf.data, title: title || undefined, mode }
+            : { source, title: title || undefined, mode },
         ),
       });
       if (!res.ok) {
@@ -88,6 +91,35 @@ export default function NewProject() {
             </div>
           ) : (
             <div style={S.card}>
+              <div style={S.modeRow}>
+                {(
+                  [
+                    ['original', 'My screenplay', 'Diagnosed: causality, structure, facts, notes. Editable, with draft states.'],
+                    ['reference', 'Study a screenplay', "A produced script to learn from. Read-only, and the Craft agent explains what each scene is doing and why it works."],
+                  ] as const
+                ).map(([value, label, blurb]) => (
+                  <button
+                    key={value}
+                    onClick={() => setMode(value)}
+                    style={{
+                      ...S.modeBtn,
+                      borderColor: mode === value ? '#3b6fd4' : '#2a2f38',
+                      background: mode === value ? '#16223a' : 'transparent',
+                    }}
+                  >
+                    <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 6 }}>{label}</div>
+                    <div style={{ color: '#8b95a3', fontSize: 12, lineHeight: 1.5 }}>{blurb}</div>
+                  </button>
+                ))}
+              </div>
+
+              {mode === 'reference' && (
+                <p style={S.refNote}>
+                  Use a script you have obtained yourself. It stays in your project for
+                  analysis — Plotkraft does not host or redistribute screenplays.
+                </p>
+              )}
+
               <button onClick={() => void loadSample()} style={S.sample}>
                 Load the sample screenplay
               </button>
@@ -173,6 +205,15 @@ const S: Record<string, React.CSSProperties> = {
   sample: {
     background: 'transparent', color: '#7aa2e3', border: '1px dashed #2a3a52',
     borderRadius: 9, padding: '14px 18px', fontSize: 15, cursor: 'pointer',
+  },
+  modeRow: { display: 'flex', gap: 10, marginBottom: 18, flexWrap: 'wrap' },
+  modeBtn: {
+    flex: '1 1 240px', textAlign: 'left', border: '1px solid', borderRadius: 10,
+    padding: '14px 16px', cursor: 'pointer', color: '#e8eaed',
+  },
+  refNote: {
+    color: '#9aa4b2', fontSize: 12.5, lineHeight: 1.6, margin: '0 0 16px',
+    borderLeft: '2px solid #2a3a52', paddingLeft: 12,
   },
   pdfNote: {
     color: '#9aa4b2', fontSize: 12.5, lineHeight: 1.6, margin: '10px 0 0',

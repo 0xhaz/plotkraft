@@ -9,6 +9,7 @@ import { ResearcherService } from './researcher.service';
 import { ParallelService } from './parallel.service';
 import { StoryCircleService } from './story-circle.service';
 import { NotesService } from './notes.service';
+import { CraftService } from './craft.service';
 import type { NoteSource } from './notes';
 
 @Controller('projects/:id/agents')
@@ -23,6 +24,7 @@ export class AgentsController {
     private readonly circle: StoryCircleService,
     private readonly notes: NotesService,
     private readonly membership: MembershipService,
+    private readonly craft: CraftService,
   ) {}
 
   /** Which agents can actually run right now — surfaced so the UI never fakes readiness. */
@@ -62,6 +64,13 @@ export class AgentsController {
   async reconcileNotes(@Param('id') id: string, @Uid() uid: string) {
     await this.membership.assertMember(id, uid);
     return this.notes.reconcile(id);
+  }
+
+  /** Reference screenplays only: what each scene does and how. */
+  @Post('craft')
+  async runCraft(@Param('id') id: string, @Uid() uid: string) {
+    await this.membership.assertMember(id, uid);
+    return this.craft.analyze(id);
   }
 
   @Post('research')

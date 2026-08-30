@@ -9,6 +9,7 @@ export interface SceneNodeData extends Record<string, unknown> {
   loadScore: number;
   flagCount: number;
   noteCount?: number;
+  status?: 'draft' | 'developing' | 'confirmed';
   /** What-if state: how this scene is affected by the simulated cut. */
   impact?: 'cut' | 'orphaned' | 'dirty' | null;
   selected?: boolean;
@@ -32,6 +33,13 @@ const IMPACT_STYLE = {
   dirty: { border: '#c9902f', bg: '#241d12', tag: 'needs re-check', tagColor: '#e0a252' },
 } as const;
 
+/** Draft state reads as a spine down the left edge of the card. */
+const STATUS_COLOR = {
+  draft: '#4a5260',
+  developing: '#d08a3e',
+  confirmed: '#4f9d69',
+} as const;
+
 export function SceneNode({ data }: NodeProps) {
   const d = data as SceneNodeData;
   const base = loadStyle(d.loadScore ?? 0);
@@ -43,6 +51,9 @@ export function SceneNode({ data }: NodeProps) {
       style={{
         width: 260,
         border: `1px solid ${d.selected ? '#7aa2e3' : s.border}`,
+        borderLeft: d.status
+          ? `4px solid ${STATUS_COLOR[d.status]}`
+          : `1px solid ${d.selected ? '#7aa2e3' : s.border}`,
         boxShadow: d.selected ? '0 0 0 2px rgba(122,162,227,.35)' : undefined,
         background: s.bg,
         borderRadius: 10,

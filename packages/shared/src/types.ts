@@ -30,8 +30,22 @@ export type FlagSeverity = 'info' | 'warn' | 'critical';
 /** The writer is the final judge — every agent flag is accept/dismiss/disagree. */
 export type FlagVerdict = 'pending' | 'accepted' | 'dismissed' | 'disagreed';
 
+/**
+ * What a project is for.
+ *
+ * A produced screenplay is studied, not diagnosed: telling a writer their
+ * finished, shot film has a weak joint is useless, while explaining how it earns
+ * a beat is the thing worth learning. The mode decides which agents run and how
+ * they speak.
+ */
+export type ProjectMode = 'original' | 'reference';
+
+/** Scrivener-style workflow marker on a scene the writer is drafting. */
+export type SceneStatus = 'draft' | 'developing' | 'confirmed';
+
 export interface Project {
   id: string;
+  mode: ProjectMode;
   title: string;
   ownerUid: string;
   memberUids: string[];
@@ -61,6 +75,11 @@ export interface Scene {
   version: number;
   /** Graph centrality, 0..1. Drives card weight and which scenes get Veo previz. */
   loadScore?: number;
+  /**
+   * Draft state. Deliberately not derived from content: a scene can be fully
+   * written and still unresolved, and only the writer knows which.
+   */
+  status?: SceneStatus;
   updatedAt: number;
 }
 

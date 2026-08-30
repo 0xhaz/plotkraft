@@ -13,7 +13,9 @@ import {
   type Edge as FlowEdge,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { collection, doc, onSnapshot, orderBy, query, updateDoc, writeBatch } from 'firebase/firestore';
+import {
+  collection, doc, onSnapshot, orderBy, query, updateDoc, writeBatch,
+} from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { serpentinePosition, actLayout, CARD_W, GAP_X, COLUMNS, type ActBand } from '@/lib/layout';
 import { SceneNode, type SceneNodeData } from './SceneNode';
@@ -24,6 +26,7 @@ import {
   runResearch,
   runStoryCircle,
   reconcileNotes,
+  runCraftAnalysis,
   type WhatIfImpact,
   type CircleResult,
 } from '@/lib/whatIf';
@@ -60,6 +63,7 @@ export function Canvas({ projectId }: { projectId: string }) {
   const [accessDenied, setAccessDenied] = useState(false);
   const [notesOpen, setNotesOpen] = useState(false);
   const [byAct, setByAct] = useState(false);
+  const [mode, setMode] = useState<'original' | 'reference'>('original');
 
   useEffect(() => {
     setAccessDenied(false);
@@ -77,6 +81,11 @@ export function Canvas({ projectId }: { projectId: string }) {
       (snap) => setScenes(snap.docs.map((d) => d.data() as SceneDoc)),
       onError,
     );
+    const unsubProject = onSnapshot(
+      doc(db(), 'projects', projectId),
+      (snap) => setMode(snap.data()?.mode === 'reference' ? 'reference' : 'original'),
+      onError,
+    );
     const unsubEdges = onSnapshot(
       collection(db(), 'projects', projectId, 'edges'),
       (snap) => setEdgeDocs(snap.docs.map((d) => d.data() as EdgeDoc)),
@@ -85,6 +94,7 @@ export function Canvas({ projectId }: { projectId: string }) {
     return () => {
       unsubScenes();
       unsubEdges();
+      unsubProject();
     };
   }, [projectId]);
 
@@ -137,6 +147,18 @@ export function Canvas({ projectId }: { projectId: string }) {
       setCircle(await runStoryCircle(projectId));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'story circle failed');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const runCraft = async () => {
+    setBusy('craft');
+    setError(null);
+    try {
+      await runCraftAnalysis(projectId);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'craft analysis failed');
     } finally {
       setBusy(null);
     }
@@ -197,12 +219,13 @@ export function Canvas({ projectId }: { projectId: string }) {
           loadScore: s.loadScore ?? 0,
           flagCount: s.flagCount ?? 0,
           noteCount: s.noteCount ?? 0,
+          status: mode === 'original' ? (s.status ?? 'draft') : undefined,
           impact: impactFor.get(s.id) ?? null,
           selected: selected.includes(s.id),
           loadDelta: deltaFor.get(s.id),
         },
       })),
-    [scenes, impactFor, selected, deltaFor, acts],
+    [scenes, impactFor, selected, deltaFor, acts, mode],
   );
 
   // React Flow needs to own node state for dragging to do anything. Firestore
@@ -333,6 +356,8 @@ export function Canvas({ projectId }: { projectId: string }) {
         onCausality={runStoryLogic}
         onResearch={runResearcher}
         onCircle={runCircle}
+        mode={mode}
+        onCraft={runCraft}
         onNotes={() => { setNotesOpen(true); setCircle(null); }}
         onTidy={tidy}
         byAct={byAct}
@@ -361,6 +386,7 @@ export function Canvas({ projectId }: { projectId: string }) {
       {detailScene && !circle && !notesOpen && (
         <ScenePanel
           projectId={projectId}
+          mode={mode}
           scene={{
             ...detailScene,
             action: detailScene.action ?? '',
@@ -426,6 +452,8 @@ function Inspector(props: {
   onCausality: () => void;
   onResearch: () => void;
   onCircle: () => void;
+  mode: 'original' | 'reference';
+  onCraft: () => void;
   onNotes: () => void;
   onTidy: () => void;
   byAct: boolean;
@@ -436,6 +464,9 @@ function Inspector(props: {
   return (
     <aside style={P.panel}>
       <div style={P.stat}>
+        {props.mode === 'reference' && (
+          <span style={{ color: '#7fb98f' }}>reference · </span>
+        )}
         {props.sceneCount} scenes · {props.edgeCount} transitions
       </div>
 
@@ -450,6 +481,16 @@ function Inspector(props: {
       >
         {props.busy === 'circle' ? 'Mapping…' : 'Run Story Circle'}
       </button>
+
+      {props.mode === 'reference' && (
+        <button
+          onClick={props.onCraft}
+          disabled={props.busy !== null}
+          style={{ ...P.button, background: '#2f6f4e' }}
+        >
+          {props.busy === 'craft' ? 'Reading…' : 'What makes it work'}
+        </button>
+      )}
 
       <button
         onClick={props.onNotes}

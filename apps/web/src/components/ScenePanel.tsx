@@ -29,6 +29,14 @@ export interface DialogueLine {
   text: string;
 }
 
+export type SceneStatus = 'draft' | 'developing' | 'confirmed';
+
+export interface Craft {
+  job: string;
+  technique: string;
+  transferable: string;
+}
+
 export interface SceneDetail {
   id: string;
   index: number;
@@ -40,6 +48,8 @@ export interface SceneDetail {
   version: number;
   circleStep?: number;
   circleReason?: string;
+  status?: SceneStatus;
+  craft?: Craft;
 }
 
 const SEVERITY_COLOR = { info: '#7aa2e3', warn: '#d08a3e', critical: '#e05252' } as const;
@@ -52,6 +62,13 @@ const VERDICT_BADGE = {
 
 const STEP_NAMES = ['', 'You', 'Need', 'Go', 'Search', 'Find', 'Take', 'Return', 'Change'];
 
+/** Workflow states, in the order a passage travels through them. */
+export const STATUSES: { value: SceneStatus; label: string; color: string }[] = [
+  { value: 'draft', label: 'Draft', color: '#6b7280' },
+  { value: 'developing', label: 'Developing', color: '#d08a3e' },
+  { value: 'confirmed', label: 'Confirmed', color: '#4f9d69' },
+];
+
 /**
  * The scene itself, then what the agents made of it.
  *
@@ -61,10 +78,12 @@ const STEP_NAMES = ['', 'You', 'Need', 'Go', 'Search', 'Find', 'Take', 'Return',
 export function ScenePanel({
   projectId,
   scene,
+  mode,
   onClose,
 }: {
   projectId: string;
   scene: SceneDetail;
+  mode: 'original' | 'reference';
   onClose: () => void;
 }) {
   const [flags, setFlags] = useState<Flag[]>([]);
@@ -90,6 +109,21 @@ export function ScenePanel({
     setDraftHeading(scene.heading);
     setDraftAction(scene.action);
   }, [scene.id, scene.heading, scene.action]);
+
+  /**
+   * Status is a workflow marker, not prose, so it needs no version bump — a
+   * writer flipping a scene to Confirmed cannot clobber anyone's words.
+   */
+  const setStatus = async (status: SceneStatus) => {
+    try {
+      await updateDoc(doc(db(), 'projects', projectId, 'scenes', scene.id), {
+        status,
+        statusAt: Date.now(),
+      });
+    } catch (e) {
+      console.error('[scene panel] could not set status', e);
+    }
+  };
 
   const setVerdict = async (flagId: string, verdict: Flag['verdict']) => {
     await updateDoc(doc(db(), 'projects', projectId, 'scenes', scene.id, 'flags', flagId), {
@@ -152,6 +186,29 @@ export function ScenePanel({
         load {(scene.loadScore ?? 0).toFixed(2)} · v{scene.version}
         {scene.characters.length > 0 && <> · {scene.characters.join(', ')}</>}
       </div>
+
+      {mode === 'original' && (
+        <div style={S.statusRow}>
+          {STATUSES.map((st) => {
+            const on = (scene.status ?? 'draft') === st.value;
+            return (
+              <button
+                key={st.value}
+                onClick={() => void setStatus(st.value)}
+                style={{
+                  ...S.statusBtn,
+                  color: on ? '#0f1216' : st.color,
+                  background: on ? st.color : 'transparent',
+                  borderColor: on ? st.color : '#2a2f38',
+                  fontWeight: on ? 600 : 400,
+                }}
+              >
+                {st.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       <div style={S.tabs}>
         <button onClick={() => setTab('scene')} style={tab === 'scene' ? S.tabOn : S.tab}>
@@ -217,15 +274,37 @@ export function ScenePanel({
               )}
             </div>
 
+            {scene.craft && (
+              <div style={S.craft}>
+                <div style={S.craftHead}>What this scene is doing</div>
+                <div style={S.craftRow}>
+                  <span style={S.craftKey}>Job</span> {scene.craft.job}
+                </div>
+                <div style={S.craftRow}>
+                  <span style={S.craftKey}>How</span> {scene.craft.technique}
+                </div>
+                <div style={{ ...S.craftRow, color: '#c9dcc9' }}>
+                  <span style={S.craftKey}>Steal this</span> {scene.craft.transferable}
+                </div>
+              </div>
+            )}
+
             {scene.circleReason && (
               <div style={S.circleNote}>
                 <strong>{STEP_NAMES[scene.circleStep ?? 0]}</strong> — {scene.circleReason}
               </div>
             )}
 
-            <button onClick={() => setEditing(true)} style={S.ghost}>
-              Edit scene
-            </button>
+            {mode === 'original' ? (
+              <button onClick={() => setEditing(true)} style={S.ghost}>
+                Edit scene
+              </button>
+            ) : (
+              <p style={S.hint}>
+                Reference screenplays are read-only — this is someone else&apos;s finished
+                work, kept here to learn from.
+              </p>
+            )}
           </>
         )
       ) : (
@@ -357,6 +436,24 @@ const S: Record<string, React.CSSProperties> = {
   circleNote: {
     color: '#9aa4b2', fontSize: 11.5, lineHeight: 1.5,
     borderLeft: '2px solid #2a3a52', paddingLeft: 10,
+  },
+  statusRow: { display: 'flex', gap: 6 },
+  statusBtn: {
+    flex: 1, border: '1px solid', borderRadius: 6, padding: '5px 0',
+    fontSize: 11, cursor: 'pointer',
+  },
+  craft: {
+    background: '#141c18', border: '1px solid #223028', borderRadius: 8,
+    padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 7,
+  },
+  craftHead: {
+    color: '#7fb98f', fontSize: 10, letterSpacing: 0.8,
+    textTransform: 'uppercase', fontWeight: 600,
+  },
+  craftRow: { fontSize: 12, lineHeight: 1.55, color: '#c7cdd6' },
+  craftKey: {
+    color: '#6f8a78', fontSize: 10, textTransform: 'uppercase',
+    letterSpacing: 0.6, marginRight: 7,
   },
   label: { fontSize: 11, color: '#8b95a3', marginTop: 8, marginBottom: 5 },
   input: {

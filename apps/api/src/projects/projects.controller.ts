@@ -4,15 +4,19 @@ import { AuthGuard } from '../auth/auth.guard';
 import { Uid } from '../auth/uid.decorator';
 import { MembershipService } from '../auth/membership.service';
 
+type Mode = 'original' | 'reference';
+
 interface ImportBody {
   title?: string;
   source: string;
+  mode?: Mode;
 }
 
 interface ImportPdfBody {
   title?: string;
   /** base64-encoded PDF bytes. */
   data: string;
+  mode?: Mode;
 }
 
 @Controller('projects')

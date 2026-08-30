@@ -39,19 +39,34 @@ export class ProjectsService {
    * week-one prerequisites: the stable IDs anchor the stored edge list, and the
    * version field is what makes stale edits visible instead of silent.
    */
-  async importFountain(params: { title?: string; source: string; ownerUid: string }) {
+  async importFountain(params: {
+    title?: string;
+    source: string;
+    ownerUid: string;
+    mode?: 'original' | 'reference';
+  }) {
     return this.persist(parseFountain(params.source), params);
   }
 
   /** Import a screenplay PDF. `data` is base64 so it survives a JSON body. */
-  async importPdf(params: { title?: string; data: string; ownerUid: string }) {
+  async importPdf(params: {
+    title?: string;
+    data: string;
+    ownerUid: string;
+    mode?: 'original' | 'reference';
+  }) {
     const parsed = await this.pdf.parse(Buffer.from(params.data, 'base64'));
     return this.persist(parsed, { ...params, sourceFormat: 'pdf' });
   }
 
   private async persist(
     parsed: ParsedScript,
-    params: { title?: string; ownerUid: string; sourceFormat?: 'fountain' | 'pdf' },
+    params: {
+      title?: string;
+      ownerUid: string;
+      sourceFormat?: 'fountain' | 'pdf';
+      mode?: 'original' | 'reference';
+    },
   ) {
     const now = Date.now();
     const db = this.fb.db;
@@ -65,6 +80,7 @@ export class ProjectsService {
       ownerUid: params.ownerUid,
       memberUids: [params.ownerUid],
       sourceFormat: params.sourceFormat ?? 'fountain',
+      mode: params.mode ?? 'original',
       createdAt: now,
       updatedAt: now,
     });
@@ -80,6 +96,8 @@ export class ProjectsService {
         characters: scene.characters,
         position: serpentine(scene.index),
         version: 1,
+        // A produced screenplay arrives finished; the writer's own starts as draft.
+        status: params.mode === 'reference' ? 'confirmed' : 'draft',
         updatedAt: now,
       });
     }

@@ -44,10 +44,14 @@ service cloud.firestore {
         //  - Moving a card is last-write-wins and harmless: two people dragging
         //    the same scene just means the later drag wins. Requiring a version
         //    bump here would make the canvas un-draggable for no safety gain.
+        //  - Draft status is a workflow marker, not the writer's prose. Moving a
+        //    scene from draft to confirmed changes nothing another editor could
+        //    lose, so it needs no version bump either.
         //  - Editing content must advance `version` by exactly one, so a stale
         //    write is rejected loudly instead of silently overwriting.
         allow update: if isMember(projectId) && (
           onlyChanged(['position'])
+          || onlyChanged(['status', 'statusAt'])
           || request.resource.data.version == resource.data.version + 1
         );
 
