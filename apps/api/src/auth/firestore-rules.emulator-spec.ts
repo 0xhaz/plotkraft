@@ -142,6 +142,31 @@ describe('scene version guard', () => {
   });
 });
 
+describe('moving a card', () => {
+  it('allows a position-only update with no version bump', async () => {
+    // Card moves are last-write-wins; demanding a version bump would make the
+    // canvas un-draggable without preventing any real conflict.
+    await assertSucceeds(
+      updateDoc(doc(asMember(), 'projects', PID, 'scenes', SID), { position: { x: 40, y: 80 } }),
+    );
+  });
+
+  it('still rejects a content edit smuggled in beside a position change', async () => {
+    await assertFails(
+      updateDoc(doc(asMember(), 'projects', PID, 'scenes', SID), {
+        position: { x: 40, y: 80 },
+        heading: 'clobbered',
+      }),
+    );
+  });
+
+  it('denies a non-member moving a card', async () => {
+    await assertFails(
+      updateDoc(doc(asStranger(), 'projects', PID, 'scenes', SID), { position: { x: 1, y: 1 } }),
+    );
+  });
+});
+
 describe('annotations are append-only', () => {
   it('lets a member add their own annotation', async () => {
     await assertSucceeds(

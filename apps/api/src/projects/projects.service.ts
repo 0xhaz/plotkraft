@@ -3,13 +3,26 @@ import { FirebaseService } from '../firebase/firebase.service';
 import { parseFountain } from '../ingest/fountain.parser';
 
 /**
- * Scene cards are laid out in a simple serpentine grid on first import; the
- * writer drags them wherever they like afterward, and position moves are
- * last-write-wins by design (architecture.md §4).
+ * Scene cards are laid out on import; the writer drags them wherever they like
+ * afterwards, and position moves are last-write-wins by design (architecture.md §4).
  */
 const COLUMNS = 4;
-const CARD_DX = 340;
-const CARD_DY = 260;
+const CARD_DX = 356;
+const CARD_DY = 170;
+
+/**
+ * Boustrophedon layout: alternate rows run right-to-left, so the scene after the
+ * end of a row sits directly beneath it. A plain grid sends that wrapping edge
+ * diagonally across the whole board, which is what makes a canvas look tangled.
+ */
+function serpentine(index: number): { x: number; y: number } {
+  const row = Math.floor(index / COLUMNS);
+  const col = index % COLUMNS;
+  return {
+    x: (row % 2 === 0 ? col : COLUMNS - 1 - col) * CARD_DX,
+    y: row * CARD_DY,
+  };
+}
 
 @Injectable()
 export class ProjectsService {
@@ -49,10 +62,7 @@ export class ProjectsService {
         action: scene.action,
         dialogue: scene.dialogue,
         characters: scene.characters,
-        position: {
-          x: (scene.index % COLUMNS) * CARD_DX,
-          y: Math.floor(scene.index / COLUMNS) * CARD_DY,
-        },
+        position: serpentine(scene.index),
         version: 1,
         updatedAt: now,
       });

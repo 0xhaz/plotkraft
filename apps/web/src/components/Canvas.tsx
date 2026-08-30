@@ -6,12 +6,15 @@ import {
   Background,
   Controls,
   MiniMap,
+  useNodesState,
   type Node,
+  type NodeChange,
   type Edge as FlowEdge,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
+import { collection, doc, onSnapshot, orderBy, query, updateDoc, writeBatch } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { serpentinePosition } from '@/lib/layout';
 import { SceneNode, type SceneNodeData } from './SceneNode';
 import { EDGE_STYLE, TransitionEdge } from './TransitionEdge';
 import {
@@ -176,7 +179,7 @@ export function Canvas({ projectId }: { projectId: string }) {
     [impact],
   );
 
-  const nodes: Node<SceneNodeData>[] = useMemo(
+  const derivedNodes: Node<SceneNodeData>[] = useMemo(
     () =>
       scenes.map((s) => ({
         id: s.id,
@@ -195,6 +198,54 @@ export function Canvas({ projectId }: { projectId: string }) {
       })),
     [scenes, impactFor, selected, deltaFor],
   );
+
+  // React Flow needs to own node state for dragging to do anything. Firestore
+  // remains the source of truth: it seeds this state and every drag is written
+  // back, so a reload and a collaborator both see where the card ended up.
+  const [nodes, setNodes, onNodesChangeInternal] = useNodesState<Node<SceneNodeData>>([]);
+
+  useEffect(() => {
+    setNodes((current) => {
+      const dragging = new Set(current.filter((n) => n.dragging).map((n) => n.id));
+      const byId = new Map(current.map((n) => [n.id, n]));
+      return derivedNodes.map((n) =>
+        // Never yank a card out from under the pointer mid-drag.
+        dragging.has(n.id) ? { ...n, position: byId.get(n.id)!.position } : n,
+      );
+    });
+  }, [derivedNodes, setNodes]);
+
+  const onNodesChange = useCallback(
+    (changes: NodeChange<Node<SceneNodeData>>[]) => onNodesChangeInternal(changes),
+    [onNodesChangeInternal],
+  );
+
+  /** Card moves are last-write-wins by design, so this is a plain field update. */
+  const persistPosition = useCallback(
+    async (sceneId: string, position: { x: number; y: number }) => {
+      try {
+        await updateDoc(doc(db(), 'projects', projectId, 'scenes', sceneId), { position });
+      } catch (e) {
+        console.error('[canvas] could not save card position', e);
+      }
+    },
+    [projectId],
+  );
+
+  /** Put the board back in reading order when it gets messy. */
+  const tidy = useCallback(async () => {
+    const batch = writeBatch(db());
+    scenes.forEach((s, i) => {
+      batch.update(doc(db(), 'projects', projectId, 'scenes', s.id), {
+        position: serpentinePosition(i),
+      });
+    });
+    try {
+      await batch.commit();
+    } catch (e) {
+      console.error('[canvas] could not tidy layout', e);
+    }
+  }, [scenes, projectId]);
 
   // The detail panel shows a single scene; multi-select is for cut simulation.
   const detailScene = selected.length === 1 ? scenes.find((s) => s.id === selected[0]) : undefined;
@@ -240,7 +291,10 @@ export function Canvas({ projectId }: { projectId: string }) {
         edges={edges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
+        onNodesChange={onNodesChange}
         onNodeClick={(_, node) => toggleSelected(node.id)}
+        onNodeDragStop={(_, node) => void persistPosition(node.id, node.position)}
+        nodesDraggable
         fitView
       >
         <Background color="#2a2f38" gap={20} />
@@ -271,6 +325,7 @@ export function Canvas({ projectId }: { projectId: string }) {
         onResearch={runResearcher}
         onCircle={runCircle}
         onNotes={() => { setNotesOpen(true); setCircle(null); }}
+        onTidy={tidy}
         onClear={clear}
       />
 
@@ -319,6 +374,7 @@ function Inspector(props: {
   onResearch: () => void;
   onCircle: () => void;
   onNotes: () => void;
+  onTidy: () => void;
   onClear: () => void;
 }) {
   const { impact } = props;
@@ -354,6 +410,10 @@ function Inspector(props: {
         style={{ ...P.button, background: '#2f6f5e' }}
       >
         {props.busy === 'research' ? 'Fact-checking…' : 'Run Researcher'}
+      </button>
+
+      <button onClick={props.onTidy} disabled={props.busy !== null} style={{ ...P.button, background: '#2a2f38' }}>
+        Tidy layout
       </button>
 
       <div style={P.hint}>
