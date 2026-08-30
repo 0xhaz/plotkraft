@@ -1,202 +1,272 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { Navbar } from '@/components/Navbar';
 import { useAuth } from '@/lib/useAuth';
-import { API_BASE } from '@/lib/firebase';
+import {
+  CausalityDiagram,
+  WhatIfDiagram,
+  CircleDiagram,
+  ResearcherDiagram,
+  NotesDiagram,
+} from '@/components/marketing/Diagrams';
 
-const AGENTS = [
-  ['Story Logic', 'Classifies every beat transition — therefore, but, or merely and-then.'],
-  ['Story Circle', "Places each scene on Harmon's eight steps and finds the missing ones."],
-  ['Researcher', 'Fact-checks real-world claims against cited sources.'],
-  ['What-if', 'Simulates a cut and shows what breaks downstream.'],
-  ['Notes', 'Reconciles notes from every source and flags where two contradict.'],
+const FEATURES = [
+  {
+    id: 'story-logic',
+    agent: 'Story Logic',
+    color: '#4f9d69',
+    title: 'Every joint in your script, classified',
+    body: `The South Park test, run on all of it. Each transition between beats is either
+      therefore (it was caused), but (it was complicated), or and then — which means nothing
+      is holding those two scenes together. Weak joints are drawn dashed, so a second act
+      that stopped causing itself is something you see rather than something you suspect.`,
+    footnote: 'Gemini classifies; you can correct any edge, and a corrected edge is never re-labelled.',
+    Diagram: CausalityDiagram,
+  },
+  {
+    id: 'what-if',
+    agent: 'What-if',
+    color: '#e05252',
+    title: 'Cut the scene before you cut the scene',
+    body: `Pull a scene off the board and the damage lights up: payoffs whose setup just
+      vanished, characters who now walk on carrying history the audience never saw, and every
+      transition the cut destroyed. It runs on a private copy of the graph, so asking the
+      question never disturbs what your collaborators are looking at.`,
+    footnote: 'The causal graph doubles as the dependency map, so the check is a graph walk — not a re-read of the script.',
+    Diagram: WhatIfDiagram,
+  },
+  {
+    id: 'story-circle',
+    agent: 'Story Circle',
+    color: '#f0951e',
+    title: 'The shape of the whole draft',
+    body: `Joints can all be sound while the script still has no second act. Every scene is
+      placed on Harmon's eight steps, so the diagnosis becomes specific and quantified: your
+      Search runs 46% of the pages against a convention of 25%, you cross into chaos at 41%
+      instead of 20%, and nothing in the script pays a price.`,
+    footnote: 'The model places scenes; the percentages are arithmetic. A number in a note you might quote should never be generated.',
+    Diagram: CircleDiagram,
+  },
+  {
+    id: 'researcher',
+    agent: 'Researcher',
+    color: '#7aa2e3',
+    title: 'The line an expert in the audience will catch',
+    body: `Procedural, legal, medical and historical claims get pulled out of the dialogue and
+      checked against live web sources through Parallel. Verified claims are shown with their
+      sources too — a clean bill of health is worth as much as a correction, and it is how you
+      know the pass actually ran.`,
+    footnote: 'Verdicts are drawn only from retrieved sources, and every citation links to a page you can open.',
+    Diagram: ResearcherDiagram,
+  },
+  {
+    id: 'notes',
+    agent: 'Notes',
+    color: '#d08a3e',
+    title: 'Your producer and your executive disagree',
+    body: `Paste in notes from everyone — producer, executive, coverage, the writer friend who
+      owed you a read. Each note is split out, pinned to the scenes it touches, and checked
+      against the others. When two of them cannot both be satisfied, you learn it now instead
+      of three drafts later.`,
+    footnote: 'Severity comes from who is disagreeing: two decision-makers block the rewrite, two peers are a conversation.',
+    Diagram: NotesDiagram,
+  },
+] as const;
+
+const STEPS = [
+  ['Upload', 'A Fountain screenplay becomes a board of scene cards with stable identity.'],
+  ['Analyse', 'Independent agents run concurrently; findings stream onto the canvas as each lands.'],
+  ['Interrogate', 'Cut a scene, re-run a pass, open a citation, resolve a note conflict.'],
+  ['Decide', 'Accept, dismiss or disagree. The draft only changes when you change it.'],
 ] as const;
 
 export default function Home() {
-  const { user, loading, signIn, devSignIn, signOutUser } = useAuth();
-  const router = useRouter();
-  const [source, setSource] = useState('');
-  const [title, setTitle] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function onFile(file: File) {
-    setSource(await file.text());
-    if (!title) setTitle(file.name.replace(/\.(fountain|txt)$/i, ''));
-  }
-
-  async function importScript() {
-    if (!user || !source.trim()) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const token = await user.getIdToken();
-      const res = await fetch(`${API_BASE}/projects/import`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ source, title: title || undefined }),
-      });
-      if (!res.ok) throw new Error(`Import failed (${res.status})`);
-      const { projectId } = await res.json();
-      router.push(`/project/${projectId}`);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Import failed');
-    } finally {
-      setBusy(false);
-    }
-  }
+  const { user } = useAuth();
 
   return (
-    <main style={S.main}>
-      <div style={S.shell}>
-        <header style={S.hero}>
+    <>
+      <Navbar />
+      <main style={S.main}>
+        <section style={S.hero}>
           <div style={S.eyebrow}>A writers&apos; room that has already read your pages</div>
-          <h1 style={S.h1}>Plotkraft</h1>
-          <p style={S.tagline}>
-            Upload a screenplay. A crew of agents maps its causal structure, checks its facts
-            against cited sources, reconciles your notes, and shows you what breaks when you
-            cut a scene — <em style={S.em}>before</em> you rewrite it.
+          <h1 style={S.h1}>
+            Structural notes on your screenplay,
+            <br />
+            <span style={S.h1Accent}>in ninety seconds</span>
+          </h1>
+          <p style={S.sub}>
+            Plotkraft reads a draft the way a good development executive does — for causality,
+            structure, factual risk and contradictory notes — and shows the results on a canvas
+            you can argue with.
           </p>
-          <p style={S.stance}>
-            Plotkraft diagnoses. It never writes prose, and every finding is yours to accept
-            or dismiss.
-          </p>
-        </header>
-
-        <div style={S.agents}>
-          {AGENTS.map(([name, what]) => (
-            <div key={name} style={S.agent}>
-              <div style={S.agentName}>{name}</div>
-              <div style={S.agentWhat}>{what}</div>
-            </div>
-          ))}
-        </div>
-
-        <section style={S.card}>
-          {loading ? (
-            <p style={S.muted}>Loading…</p>
-          ) : !user ? (
-            <>
-              <button onClick={() => void signIn()} style={S.primary}>
-                Sign in with Google
-              </button>
-              {devSignIn && (
-                <button onClick={() => void devSignIn()} style={S.secondary}>
-                  Continue as local dev user
-                </button>
-              )}
-              {devSignIn && (
-                <p style={S.hint}>
-                  Running against the Firebase emulators — the Google picker is faked and starts
-                  empty, so the dev user is usually what you want here.
-                </p>
-              )}
-            </>
-          ) : (
-            <>
-              <div style={S.userRow}>
-                <span style={S.muted}>Signed in as {user.email ?? user.uid}</span>
-                <button onClick={() => void signOutUser()} style={S.link}>
-                  Sign out
-                </button>
-              </div>
-
-              <label style={S.label}>Title</label>
-              <input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="Untitled Script"
-                style={S.input}
-              />
-
-              <label style={S.label}>Fountain script</label>
-              <input
-                type="file"
-                accept=".fountain,.txt"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) void onFile(f);
-                }}
-                style={{ ...S.input, padding: 8 }}
-              />
-              <textarea
-                value={source}
-                onChange={(e) => setSource(e.target.value)}
-                placeholder="…or paste your script here"
-                rows={8}
-                style={{ ...S.input, fontFamily: 'ui-monospace, monospace', fontSize: 12 }}
-              />
-
-              {error && <p style={S.error}>{error}</p>}
-
-              <button
-                onClick={() => void importScript()}
-                disabled={busy || !source.trim()}
-                style={{ ...S.primary, opacity: busy || !source.trim() ? 0.5 : 1 }}
-              >
-                {busy ? 'Importing…' : 'Import script'}
-              </button>
-            </>
-          )}
+          <div style={S.heroCta}>
+            <Link href={user ? '/new' : '#how'} style={S.primary}>
+              {user ? 'Open workspace' : 'See how it works'}
+            </Link>
+            <a href="#agents" style={S.secondary}>Meet the agents</a>
+          </div>
+          <div style={S.compare}>
+            A coverage service charges $60–$1,500 and takes two weeks. This runs on every draft.
+          </div>
         </section>
-      </div>
-    </main>
+
+        <section id="how" style={S.band}>
+          <SectionHead kicker="How it works" title="Four steps, one canvas" />
+          <div style={S.steps}>
+            {STEPS.map(([name, what], i) => (
+              <div key={name} style={S.step}>
+                <div style={S.stepNum}>{i + 1}</div>
+                <div style={S.stepName}>{name}</div>
+                <div style={S.stepWhat}>{what}</div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section id="agents" style={S.band}>
+          <SectionHead
+            kicker="The crew"
+            title="Five agents, each answering a different question"
+          />
+          <div style={S.features}>
+            {FEATURES.map((f, i) => (
+              <article key={f.id} id={f.id} style={{ ...S.feature, flexDirection: i % 2 ? 'row-reverse' : 'row' }}>
+                <div style={S.featureText}>
+                  <div style={{ ...S.agentTag, color: f.color, borderColor: `${f.color}55` }}>
+                    {f.agent}
+                  </div>
+                  <h3 style={S.featureTitle}>{f.title}</h3>
+                  <p style={S.featureBody}>{f.body}</p>
+                  <p style={S.footnote}>{f.footnote}</p>
+                </div>
+                <div style={S.figure}>
+                  <f.Diagram />
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section id="stance" style={S.band}>
+          <div style={S.stance}>
+            <SectionHead kicker="Our stance" title="An analyst, not a ghostwriter" />
+            <p style={S.stanceBody}>
+              Plotkraft does not generate prose, and it will not offer to. It reads what you
+              wrote and tells you where the structure is load-bearing, where a fact will not
+              survive contact with an audience, and where two people are asking you for
+              opposite things. Every finding carries accept, dismiss and disagree, because the
+              tool is not the author of anything.
+            </p>
+            <p style={S.stanceBody}>
+              A dismissed note is treated as information: dismiss the same kind of flag twice
+              and the agent stops raising it on this project. A note you keep ignoring is worse
+              than no note at all.
+            </p>
+          </div>
+        </section>
+
+        <footer style={S.footer}>
+          <span>Plotkraft</span>
+          <span style={{ color: '#4a5260' }}>·</span>
+          <span>Gemini on Vertex AI + Parallel Search</span>
+        </footer>
+      </main>
+    </>
+  );
+}
+
+function SectionHead({ kicker, title }: { kicker: string; title: string }) {
+  return (
+    <div style={S.sectionHead}>
+      <div style={S.kicker}>{kicker}</div>
+      <h2 style={S.h2}>{title}</h2>
+    </div>
   );
 }
 
 const S: Record<string, React.CSSProperties> = {
   main: {
-    minHeight: '100vh',
-    background: 'radial-gradient(1100px 520px at 50% -8%, #1a2030 0%, #0f1216 62%)',
-    color: '#e8eaed',
-    padding: '56px 24px 72px',
+    background: '#0f1216', color: '#e8eaed', minHeight: '100vh',
     fontFamily: 'ui-sans-serif, system-ui, -apple-system, sans-serif',
   },
-  shell: { maxWidth: 760, margin: '0 auto' },
-  hero: { textAlign: 'center', marginBottom: 34 },
+  hero: {
+    maxWidth: 780, margin: '0 auto', padding: '76px 22px 64px', textAlign: 'center',
+  },
   eyebrow: {
-    color: '#7aa2e3', fontSize: 11.5, letterSpacing: 1.4,
-    textTransform: 'uppercase', marginBottom: 14,
+    color: '#7aa2e3', fontSize: 11.5, letterSpacing: 1.5,
+    textTransform: 'uppercase', marginBottom: 18,
   },
-  h1: { fontSize: 52, fontWeight: 700, margin: 0, letterSpacing: -1.4, lineHeight: 1.05 },
-  tagline: {
-    color: '#b6bec9', marginTop: 16, marginBottom: 10, lineHeight: 1.65,
-    fontSize: 15.5, maxWidth: 600, marginLeft: 'auto', marginRight: 'auto',
+  h1: { fontSize: 46, fontWeight: 700, margin: 0, letterSpacing: -1.3, lineHeight: 1.14 },
+  h1Accent: {
+    background: 'linear-gradient(92deg, #4f9d69 0%, #7aa2e3 48%, #a03fd8 100%)',
+    WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent',
   },
-  em: { color: '#e8eaed', fontStyle: 'italic' },
-  stance: { color: '#78828f', fontSize: 12.5, lineHeight: 1.6, maxWidth: 480, margin: '0 auto' },
-  agents: {
-    display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
-    gap: 10, marginBottom: 30,
+  sub: {
+    color: '#b6bec9', fontSize: 16, lineHeight: 1.68, marginTop: 20,
+    maxWidth: 620, marginLeft: 'auto', marginRight: 'auto',
   },
-  agent: {
-    background: '#141820', border: '1px solid #222831', borderRadius: 9,
-    padding: '11px 13px',
-  },
-  agentName: { fontSize: 12.5, fontWeight: 600, marginBottom: 4 },
-  agentWhat: { color: '#8b95a3', fontSize: 11.5, lineHeight: 1.5 },
-  card: {
-    background: '#12151a', border: '1px solid #222831', borderRadius: 12,
-    padding: 22, display: 'flex', flexDirection: 'column',
-  },
-  label: { display: 'block', fontSize: 11.5, color: '#8b95a3', marginTop: 14, marginBottom: 6 },
-  input: {
-    width: '100%', background: '#0f1216', border: '1px solid #2a2f38', borderRadius: 8,
-    padding: '10px 12px', color: '#e8eaed', fontSize: 14, boxSizing: 'border-box',
-  },
+  heroCta: { display: 'flex', gap: 12, justifyContent: 'center', marginTop: 28, flexWrap: 'wrap' },
   primary: {
-    marginTop: 18, background: '#3b6fd4', color: '#fff', border: 'none', borderRadius: 8,
-    padding: '11px 18px', fontSize: 14, fontWeight: 600, cursor: 'pointer',
+    background: '#3b6fd4', color: '#fff', borderRadius: 8, padding: '12px 22px',
+    fontSize: 14, fontWeight: 600, textDecoration: 'none',
   },
   secondary: {
-    marginTop: 9, background: 'transparent', color: '#9aa4b2',
-    border: '1px solid #2a2f38', borderRadius: 8,
-    padding: '10px 18px', fontSize: 13, cursor: 'pointer',
+    color: '#9aa4b2', border: '1px solid #2a2f38', borderRadius: 8,
+    padding: '12px 22px', fontSize: 14, textDecoration: 'none',
   },
-  link: { background: 'none', border: 'none', color: '#7aa2e3', cursor: 'pointer', fontSize: 13 },
-  muted: { color: '#8b95a3', fontSize: 13 },
-  hint: { color: '#6b7280', fontSize: 11, lineHeight: 1.55, marginTop: 12, marginBottom: 0 },
-  error: { color: '#e07070', fontSize: 13, marginBottom: 0 },
-  userRow: { display: 'flex', alignItems: 'center', gap: 12 },
+  compare: {
+    marginTop: 30, color: '#78828f', fontSize: 12.5, lineHeight: 1.6,
+    borderTop: '1px solid #1c2129', paddingTop: 20,
+  },
+  band: { maxWidth: 1000, margin: '0 auto', padding: '52px 22px' },
+  sectionHead: { marginBottom: 30 },
+  kicker: {
+    color: '#7aa2e3', fontSize: 11, letterSpacing: 1.4,
+    textTransform: 'uppercase', marginBottom: 9,
+  },
+  h2: { fontSize: 27, fontWeight: 700, margin: 0, letterSpacing: -0.6 },
+  steps: {
+    display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(198px, 1fr))', gap: 12,
+  },
+  step: {
+    background: '#141820', border: '1px solid #222831', borderRadius: 10, padding: '15px 16px',
+  },
+  stepNum: {
+    width: 21, height: 21, borderRadius: 6, background: '#1d2634',
+    color: '#7aa2e3', fontSize: 11, fontWeight: 700,
+    display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10,
+  },
+  stepName: { fontSize: 13.5, fontWeight: 600, marginBottom: 5 },
+  stepWhat: { color: '#8b95a3', fontSize: 12, lineHeight: 1.55 },
+  features: { display: 'flex', flexDirection: 'column', gap: 16 },
+  feature: {
+    display: 'flex', gap: 26, alignItems: 'center', flexWrap: 'wrap',
+    background: '#12151a', border: '1px solid #1e242c', borderRadius: 12, padding: '24px 26px',
+  },
+  featureText: { flex: '1 1 320px', minWidth: 280 },
+  agentTag: {
+    display: 'inline-block', border: '1px solid', borderRadius: 5,
+    padding: '2px 8px', fontSize: 10.5, fontWeight: 600,
+    letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 12,
+  },
+  featureTitle: { fontSize: 19, fontWeight: 650, margin: '0 0 10px', letterSpacing: -0.3 },
+  featureBody: { color: '#b6bec9', fontSize: 13.5, lineHeight: 1.68, margin: '0 0 11px' },
+  footnote: {
+    color: '#6f7986', fontSize: 11.5, lineHeight: 1.55, margin: 0,
+    borderLeft: '2px solid #232a33', paddingLeft: 10,
+  },
+  figure: {
+    flex: '1 1 320px', minWidth: 280,
+    background: '#0f1216', border: '1px solid #1e242c', borderRadius: 10, padding: 16,
+  },
+  stance: {
+    background: '#12151a', border: '1px solid #1e242c', borderRadius: 12, padding: '30px 30px 26px',
+  },
+  stanceBody: { color: '#b6bec9', fontSize: 14, lineHeight: 1.72, margin: '0 0 14px', maxWidth: 720 },
+  footer: {
+    borderTop: '1px solid #1c2129', marginTop: 30, padding: '26px 22px 40px',
+    display: 'flex', gap: 10, justifyContent: 'center',
+    color: '#6f7986', fontSize: 12, flexWrap: 'wrap',
+  },
 };

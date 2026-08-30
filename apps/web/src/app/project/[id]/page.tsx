@@ -33,6 +33,8 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
           Plotkraft
         </Link>
         <span style={{ color: '#4a5260' }}>/</span>
+        <Link href="/new" style={{ color: '#9aa4b2', textDecoration: 'none' }}>new</Link>
+        <span style={{ color: '#4a5260' }}>/</span>
         <span style={{ color: '#9aa4b2' }}>canvas</span>
         <Legend />
       </header>
