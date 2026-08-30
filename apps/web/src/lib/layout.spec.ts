@@ -102,3 +102,38 @@ describe('actLayout', () => {
     expect(positions.get('y')!.x).toBeLessThan(positions.get('x')!.x);
   });
 });
+
+describe('actLayout — collapsing', () => {
+  const many = [
+    ...Array.from({ length: 5 }, (_, i) => ({ id: `a${i}`, index: i, circleStep: 1 })),
+    ...Array.from({ length: 40 }, (_, i) => ({ id: `b${i}`, index: 10 + i, circleStep: 5 })),
+    ...Array.from({ length: 5 }, (_, i) => ({ id: `c${i}`, index: 100 + i, circleStep: 8 })),
+  ];
+
+  it('hides the scenes of a collapsed act', () => {
+    const { hidden, positions } = actLayout(many, COLUMNS, new Set([2]));
+    expect(hidden.size).toBe(40);
+    expect(positions.has('b0')).toBe(false);
+    expect(positions.has('a0')).toBe(true);
+  });
+
+  it('keeps a collapsed act visible as a landmark', () => {
+    const { bands } = actLayout(many, COLUMNS, new Set([2]));
+    const two = bands.find((b) => b.act === 2)!;
+    expect(two.collapsed).toBe(true);
+    expect(two.sceneIds).toHaveLength(40);
+    expect(two.height).toBeLessThan(80);
+  });
+
+  it('pulls the later acts up when one is collapsed', () => {
+    const open = actLayout(many).bands.find((b) => b.act === 3)!;
+    const shut = actLayout(many, COLUMNS, new Set([2])).bands.find((b) => b.act === 3)!;
+    expect(shut.y).toBeLessThan(open.y);
+  });
+
+  it('hides everything when all acts are collapsed', () => {
+    const { hidden, bands } = actLayout(many, COLUMNS, new Set([1, 2, 3, 0]));
+    expect(hidden.size).toBe(many.length);
+    expect(bands).toHaveLength(3);
+  });
+});

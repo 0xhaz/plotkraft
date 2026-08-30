@@ -44,7 +44,14 @@ export class StoryCircleService {
     const scenes = snap.docs.map((d) => d.data());
 
     if (!scenes.length) {
-      return { shares: emptyShares(), goThreshold: null, returnThreshold: null, diagnostics: [], assigned: 0 };
+      return {
+        shares: emptyShares(),
+        goThreshold: null,
+        returnThreshold: null,
+        diagnostics: [],
+        nonLinearity: 0,
+        assigned: 0,
+      };
     }
 
     const beats = scenes.map((s) => ({
@@ -108,6 +115,7 @@ export class StoryCircleService {
           returnThreshold: analysis.returnThreshold,
           diagnostics: analysis.diagnostics,
           analyzedAt: Date.now(),
+          nonLinearity: analysis.nonLinearity,
           lowConfidenceCount: assignments.length - confident.length,
         },
       },

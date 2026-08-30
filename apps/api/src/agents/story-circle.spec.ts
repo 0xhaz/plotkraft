@@ -116,16 +116,35 @@ describe('analyzeCircle — thresholds', () => {
   });
 });
 
-describe('analyzeCircle — ordering', () => {
-  it('flags a beat that arrives well after its step has passed', () => {
-    const a = analyzeCircle(from([1, 2, 3, 4, 5, 6, 7, 2, 8] as CircleStep[]));
-    expect(a.diagnostics.some((d) => d.kind === 'out_of_order')).toBe(true);
-  });
-
-  it('tolerates a single step of backtracking', () => {
+describe('analyzeCircle — non-linearity', () => {
+  it('says nothing about a broadly linear script', () => {
     // Interleaving Search and Find is normal screenwriting, not an error.
     const a = analyzeCircle(from([1, 2, 3, 4, 5, 4, 5, 6, 7, 8] as CircleStep[]));
-    expect(a.diagnostics.filter((d) => d.kind === 'out_of_order')).toEqual([]);
+    expect(a.diagnostics.filter((d) => d.kind === 'non_linear')).toEqual([]);
+    expect(a.nonLinearity).toBeLessThan(0.15);
+  });
+
+  it('reports a heavily intercut script once, not per scene', () => {
+    // A feature cutting between two threads: this used to emit one warning per
+    // cut and bury every real finding.
+    const steps = [1, 5, 1, 5, 1, 6, 2, 6, 2, 7, 3, 7, 4, 8] as CircleStep[];
+    const a = analyzeCircle(from(steps));
+    const flagged = a.diagnostics.filter((d) => d.kind === 'non_linear');
+    expect(flagged).toHaveLength(1);
+    expect(flagged[0].severity).toBe('info');
+    expect(flagged[0].message).toMatch(/intercut/i);
+  });
+
+  it('keeps the total finding count small even on a badly intercut script', () => {
+    const steps = Array.from({ length: 200 }, (_, i) => ((i % 8) + 1) as CircleStep);
+    const a = analyzeCircle(from(steps));
+    // The old per-scene rule produced well over a hundred here.
+    expect(a.diagnostics.length).toBeLessThan(12);
+  });
+
+  it('measures the backtrack rate rather than merely flagging it', () => {
+    const a = analyzeCircle(from([1, 8, 1, 8, 1, 8] as CircleStep[]));
+    expect(a.nonLinearity).toBeGreaterThan(0.15);
   });
 });
 

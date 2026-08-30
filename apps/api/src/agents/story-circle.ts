@@ -53,13 +53,15 @@ export interface SceneAssignment {
 }
 
 export interface CircleDiagnostic {
-  kind: 'missing_step' | 'disproportionate' | 'late_threshold' | 'compressed_return' | 'out_of_order';
+  kind: 'missing_step' | 'disproportionate' | 'late_threshold' | 'compressed_return' | 'non_linear';
   severity: 'info' | 'warn' | 'critical';
   step?: CircleStep;
   message: string;
 }
 
 export interface CircleAnalysis {
+  /** Share of scenes that return to an earlier step, 0..1. */
+  nonLinearity: number;
   /** Share of total weight per step, 0..1. */
   shares: Record<CircleStep, number>;
   /** Cumulative share at which the script first enters chaos (step 3). */
@@ -74,6 +76,9 @@ const ALL_STEPS: CircleStep[] = [1, 2, 3, 4, 5, 6, 7, 8];
 /** Below this many scenes, proportion complaints are noise rather than signal. */
 const MIN_SCENES_FOR_PROPORTION = 8;
 
+/** Backtrack rate above which a script is worth calling intercut. */
+const NON_LINEAR_THRESHOLD = 0.15;
+
 const pct = (n: number) => `${Math.round(n * 100)}%`;
 
 export function analyzeCircle(assignments: SceneAssignment[]): CircleAnalysis {
@@ -81,7 +86,7 @@ export function analyzeCircle(assignments: SceneAssignment[]): CircleAnalysis {
 
   const total = assignments.reduce((sum, a) => sum + Math.max(0, a.weight), 0);
   if (total === 0 || assignments.length === 0) {
-    return { shares, goThreshold: null, returnThreshold: null, diagnostics: [] };
+    return { shares, goThreshold: null, returnThreshold: null, diagnostics: [], nonLinearity: 0 };
   }
 
   for (const a of assignments) shares[a.step] += Math.max(0, a.weight) / total;
@@ -171,23 +176,34 @@ export function analyzeCircle(assignments: SceneAssignment[]): CircleAnalysis {
     });
   }
 
-  // --- out of order ---
-  // Report only a scene that sits before an earlier-numbered step's territory,
-  // which usually means a misplaced beat rather than a flashback.
+  // --- non-linearity ---
+  //
+  // This was once a per-scene "out of order" warning, which was wrong. A feature
+  // intercuts between parallel storylines, so every cut back to a thread at an
+  // earlier stage tripped it: a real 244-scene screenplay produced 144 of them,
+  // drowning the three findings that mattered. Arriving at an earlier step is
+  // not a defect — it is what intercutting looks like.
+  //
+  // The measurement is still worth making, as one observation rather than a
+  // pile of warnings, because it tells the writer how much to trust the rest:
+  // step assignment is genuinely less reliable on a heavily intercut script.
   let highWater: CircleStep = 1;
+  let backtracks = 0;
   for (const a of ordered) {
-    if (a.step < highWater - 1) {
-      diagnostics.push({
-        kind: 'out_of_order',
-        severity: 'info',
-        step: a.step,
-        message: `Scene ${a.index + 1} reads as ${STEP_NAMES[a.step].key} (step ${a.step}) but arrives after step ${highWater}.`,
-      });
-    }
+    if (a.step < highWater - 1) backtracks++;
     if (a.step > highWater) highWater = a.step;
   }
 
-  return { shares, goThreshold, returnThreshold, diagnostics };
+  const nonLinearity = ordered.length === 0 ? 0 : backtracks / ordered.length;
+  if (nonLinearity >= NON_LINEAR_THRESHOLD) {
+    diagnostics.push({
+      kind: 'non_linear',
+      severity: 'info',
+      message: `Heavily intercut: ${pct(nonLinearity)} of scenes return to an earlier step. That is normal for parallel storylines, but it makes step placement less certain — treat the proportions as the reliable signal.`,
+    });
+  }
+
+  return { shares, goThreshold, returnThreshold, diagnostics, nonLinearity };
 }
 
 /**

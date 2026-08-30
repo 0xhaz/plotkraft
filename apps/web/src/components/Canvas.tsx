@@ -17,7 +17,10 @@ import {
   collection, doc, onSnapshot, orderBy, query, updateDoc, writeBatch,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { serpentinePosition, actLayout, CARD_W, GAP_X, COLUMNS, type ActBand } from '@/lib/layout';
+import {
+  serpentinePosition, actLayout, CARD_W, GAP_X, COLUMNS, LARGE_SCRIPT,
+  type ActBand, type Act,
+} from '@/lib/layout';
 import { SceneNode, type SceneNodeData } from './SceneNode';
 import { EDGE_STYLE, TransitionEdge } from './TransitionEdge';
 import {
@@ -64,6 +67,8 @@ export function Canvas({ projectId }: { projectId: string }) {
   const [notesOpen, setNotesOpen] = useState(false);
   const [byAct, setByAct] = useState(false);
   const [mode, setMode] = useState<'original' | 'reference'>('original');
+  const [collapsed, setCollapsed] = useState<ReadonlySet<Act>>(new Set());
+  const [autoGrouped, setAutoGrouped] = useState(false);
 
   useEffect(() => {
     setAccessDenied(false);
@@ -203,13 +208,40 @@ export function Canvas({ projectId }: { projectId: string }) {
    * arrangement of the board rather than destroying it.
    */
   const acts = useMemo(
-    () => (byAct ? actLayout(scenes.map((s) => ({ id: s.id, index: s.index, circleStep: s.circleStep }))) : null),
-    [byAct, scenes],
+    () =>
+      byAct
+        ? actLayout(
+            scenes.map((s) => ({ id: s.id, index: s.index, circleStep: s.circleStep })),
+            COLUMNS,
+            collapsed,
+          )
+        : null,
+    [byAct, scenes, collapsed],
   );
+
+  // A feature runs to 150-250 scenes. A flat grid of that is unreadable, so a
+  // large script opens grouped — once only, so the writer's later choice sticks.
+  useEffect(() => {
+    if (!autoGrouped && scenes.length > LARGE_SCRIPT) {
+      setByAct(true);
+      setAutoGrouped(true);
+    }
+  }, [scenes.length, autoGrouped]);
+
+  const toggleAct = useCallback((act: Act) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(act)) next.delete(act);
+      else next.add(act);
+      return next;
+    });
+  }, []);
 
   const derivedNodes: Node<SceneNodeData>[] = useMemo(
     () =>
-      scenes.map((s) => ({
+      scenes
+        .filter((s) => !acts?.hidden.has(s.id))
+        .map((s) => ({
         id: s.id,
         type: 'scene',
         position: acts?.positions.get(s.id) ?? s.position ?? { x: 0, y: 0 },
@@ -329,7 +361,7 @@ export function Canvas({ projectId }: { projectId: string }) {
         fitView
       >
         <Background color="#2a2f38" gap={20} />
-        {acts && <ActBands bands={acts.bands} />}
+        {acts && <ActBands bands={acts.bands} onToggle={toggleAct} />}
         <Controls />
         <MiniMap
           pannable
@@ -361,6 +393,8 @@ export function Canvas({ projectId }: { projectId: string }) {
         onNotes={() => { setNotesOpen(true); setCircle(null); }}
         onTidy={tidy}
         byAct={byAct}
+        onCollapseAll={() => setCollapsed(new Set<Act>([1, 2, 3, 0]))}
+        onExpandAll={() => setCollapsed(new Set<Act>())}
         onToggleAct={() => setByAct((v) => !v)}
         onClear={clear}
       />
@@ -402,7 +436,7 @@ export function Canvas({ projectId }: { projectId: string }) {
 }
 
 /** Labelled regions behind the cards, drawn in canvas coordinates. */
-function ActBands({ bands }: { bands: ActBand[] }) {
+function ActBands({ bands, onToggle }: { bands: ActBand[]; onToggle: (act: Act) => void }) {
   const width = COLUMNS * (CARD_W + GAP_X) - GAP_X + 48;
   return (
     <ViewportPortal>
@@ -420,8 +454,20 @@ function ActBands({ bands }: { bands: ActBand[] }) {
             pointerEvents: 'none',
           }}
         >
-          <div
+          <button
+            onClick={() => onToggle(b.act)}
             style={{
+              // Only the header takes clicks; the band itself must not swallow
+              // interaction with the cards inside it.
+              pointerEvents: 'all',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              width: '100%',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              textAlign: 'left',
               padding: '13px 18px',
               fontSize: 12.5,
               fontWeight: 600,
@@ -430,11 +476,13 @@ function ActBands({ bands }: { bands: ActBand[] }) {
               fontFamily: 'ui-sans-serif, system-ui, sans-serif',
             }}
           >
+            <span style={{ fontSize: 10, opacity: 0.8 }}>{b.collapsed ? '▶' : '▼'}</span>
             {b.label}
             <span style={{ color: '#6b7280', fontWeight: 400 }}>
-              {' '}· {b.sceneIds.length} scene{b.sceneIds.length === 1 ? '' : 's'}
+              {b.sceneIds.length} scene{b.sceneIds.length === 1 ? '' : 's'}
+              {b.collapsed ? ' · hidden' : ''}
             </span>
-          </div>
+          </button>
         </div>
       ))}
     </ViewportPortal>
@@ -458,6 +506,8 @@ function Inspector(props: {
   onTidy: () => void;
   byAct: boolean;
   onToggleAct: () => void;
+  onCollapseAll: () => void;
+  onExpandAll: () => void;
   onClear: () => void;
 }) {
   const { impact } = props;
@@ -523,6 +573,17 @@ function Inspector(props: {
           Tidy
         </button>
       </div>
+
+      {props.byAct && (
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={props.onCollapseAll} style={{ ...P.button, background: '#22272f', flex: 1, fontWeight: 400 }}>
+            Collapse all
+          </button>
+          <button onClick={props.onExpandAll} style={{ ...P.button, background: '#22272f', flex: 1, fontWeight: 400 }}>
+            Expand all
+          </button>
+        </div>
+      )}
 
       <div style={P.hint}>
         {props.selected.length === 0

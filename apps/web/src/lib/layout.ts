@@ -69,7 +69,15 @@ export interface ActBand {
   y: number;
   height: number;
   sceneIds: string[];
+  collapsed: boolean;
 }
+
+/**
+ * Above this many scenes a flat board stops being navigable and act grouping
+ * becomes the default view. A feature runs to 150-250 scenes; nobody scans that
+ * as one grid.
+ */
+export const LARGE_SCRIPT = 40;
 
 /**
  * Lay scenes out in stacked act bands, preserving script order inside each.
@@ -79,9 +87,11 @@ export interface ActBand {
 export function actLayout(
   scenes: { id: string; index: number; circleStep?: number }[],
   columns = COLUMNS,
-): { positions: Map<string, Placed>; bands: ActBand[] } {
+  collapsed: ReadonlySet<Act> = new Set(),
+): { positions: Map<string, Placed>; bands: ActBand[]; hidden: Set<string> } {
   const order: Act[] = [1, 2, 3, 0];
   const positions = new Map<string, Placed>();
+  const hidden = new Set<string>();
   const bands: ActBand[] = [];
 
   let cursorY = 0;
@@ -91,18 +101,31 @@ export function actLayout(
       .sort((a, b) => a.index - b.index);
     if (inAct.length === 0) continue;
 
-    const rows = Math.ceil(inAct.length / columns);
-    const bodyTop = cursorY + ACT_HEADER_H;
+    const sceneIds = inAct.map((s) => s.id);
+    const isCollapsed = collapsed.has(act);
 
+    if (isCollapsed) {
+      // A collapsed act keeps its header so it stays a navigable landmark, but
+      // its scenes leave the graph entirely rather than being drawn off-screen.
+      for (const id of sceneIds) hidden.add(id);
+      bands.push({
+        act, label: ACT_LABEL[act], y: cursorY, height: ACT_HEADER_H, sceneIds, collapsed: true,
+      });
+      cursorY += ACT_HEADER_H + GAP_Y;
+      continue;
+    }
+
+    const bodyTop = cursorY + ACT_HEADER_H;
     inAct.forEach((s, i) => {
       const p = serpentinePosition(i, columns);
       positions.set(s.id, { x: p.x, y: bodyTop + p.y });
     });
 
+    const rows = Math.ceil(inAct.length / columns);
     const height = ACT_HEADER_H + rows * (CARD_H + GAP_Y);
-    bands.push({ act, label: ACT_LABEL[act], y: cursorY, height, sceneIds: inAct.map((s) => s.id) });
+    bands.push({ act, label: ACT_LABEL[act], y: cursorY, height, sceneIds, collapsed: false });
     cursorY += height + GAP_Y;
   }
 
-  return { positions, bands };
+  return { positions, bands, hidden };
 }
