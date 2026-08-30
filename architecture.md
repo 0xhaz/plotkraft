@@ -10,6 +10,7 @@
 | **Researcher** | Fact-checks real-world references in the script (locations, brands, historical/legal/medical/technical accuracy) with cited sources | Parallel Search + Extract |
 | **Continuity** | Builds scene graph: characters, props, timeline; flags contradictions across scenes. Feeds off the auto-extracted character/world bible | Gemini reasoning over parsed script |
 | **Story Logic (Causality)** | Applies the Parker/Stone "therefore/but" rule: classifies every beat transition as *therefore* (causal), *but* (adversative), or *and then* (merely sequential); flags weak joints | Gemini classification over beat sheet |
+| **Story Circle (Structure)** | Maps every scene onto Dan Harmon's 8-step circle (You/Need/Go/Search/Find/Take/Return/Change); reports missing steps, mis-ordered steps, and disproportionate ones ("Search runs 41% of your pages"). Macro complement to Story Logic's micro joints | Gemini classification over the beat sheet |
 | **Notes** | Ingests pasted/uploaded notes from multiple sources (producer, exec, peer, coverage), maps each note to affected scene(s), pins to canvas cards, flags where two notes contradict each other | Gemini classification + canvas pinning |
 | **Comparables** | Pulls live data on comparable films, genre beat-structure norms ("comps hit first reversal by p.12, yours at p.31"), festival/box-office context | Parallel Search API |
 | **Previz** | Two tiers: **Imagen 3 storyboard panels** for many scenes (cheap, fast — explicitly pitched in hackathon resources) + **Veo animatic clips** for the 2–3 top load-bearing scenes | Vertex AI Imagen 3 + Veo |
@@ -29,6 +30,7 @@ NestJS API on Cloud Run
         │     ├── docParse        → Gemini multimodal (PDF/Fountain script)
         │     ├── parallelSearch  → parallel-web TS SDK (Researcher, Comparables)
         │     ├── causalityPass   → Gemini (Continuity, Story Logic)
+        │     ├── circlePass      → Gemini (Story Circle: 8-step structural map)
         │     ├── bibleExtract    → Gemini (character/world bible)
         │     ├── notesPass       → Gemini (note mapping + contradiction flags)
         │     ├── imagenBoards    → Vertex AI Imagen 3 (storyboard tier)
@@ -39,6 +41,40 @@ NestJS API on Cloud Run
         ├── Cloud Storage → scripts, Veo clips, Imagen boards
         └── Secret Manager → Parallel API key
 ```
+
+## 2b. Two altitudes of structure
+
+Story Logic and Story Circle answer different questions, and a writer needs both:
+
+| | Story Logic (therefore/but) | Story Circle (Harmon) |
+|---|---|---|
+| Altitude | The joint between two beats | The shape of the whole script |
+| Catches | "Scene 7 merely follows scene 6" | "Nothing in your script pays a price" |
+| Fails to catch | A perfectly-causal script with no second act | A well-shaped script made of limp joints |
+| Cost | One Flash pass over transitions | One Flash pass over the same beat sheet |
+
+The circle also carries an **order/chaos axis** that the canvas can render directly:
+steps 1–2 and 7–8 sit in the ordered world, 3–6 in chaos, with threshold crossings
+at **Go** (3) and **Return** (7). Those two crossings are the most diagnosable
+moments in a screenplay — a late **Go** *is* the slow-start note, and a compressed
+**Return** *is* the rushed-ending note, both stated as page positions rather than vibes.
+
+Diagnostics worth shipping (each is a flag, accept/dismiss like any other):
+
+- **Missing step** — "No scene pays a price (step 6, Take). Your protagonist gets what they want for free."
+- **Disproportionate step** — "Search occupies 41% of your pages; the convention is ~25%." This is the sagging-Act-2 note, quantified.
+- **Late threshold** — "You cross into chaos at page 31 of 110 (28%); convention is ~12%."
+- **Compressed return** — "Steps 7–8 occupy 4% of pages: the transformation is asserted, not dramatised."
+
+Two things fall out of this cheaply:
+
+- **Previz targeting improves.** Load score says which scenes carry weight; the circle
+  says which carry *meaning*. A scene that is both load-bearing and the **Take** is the
+  obvious candidate for a Veo clip — better than load score alone, which cannot tell a
+  structurally central scene from a merely well-connected one.
+- **Comparables gets a spine.** The Comparables agent's pitch ("comps hit the first
+  reversal by p.12, yours at p.31") needs a normalised position to compare *against*.
+  The circle supplies exactly that, turning a stretch feature into a lookup.
 
 ## 3. Agent efficiency design
 
@@ -73,6 +109,7 @@ Principle: get multiplayer safety from **data-model design**, not CRDTs (collab 
 ## 5. Reliability fallbacks
 
 - Gemini causal-edge labeling unreliable on a real 100-page script → writer-confirmed edges (human-in-the-loop).
+- Story Circle step assignment ambiguous on non-linear or ensemble scripts → present as a *reading* the writer can re-assign by dragging a scene to another step, never as a verdict. Report proportions (which are robust) even when individual assignments are uncertain.
 - Contradiction detection high false-positive rate → ship as "flags to review," lead demo with causality instead.
 - Veo latency/cost blocks iteration → pre-generate + cache all demo clips (default posture anyway); Imagen storyboard tier carries previz breadth.
 - Parallel credits run low → cache aggressively, cap calls, `mode: 'basic'` everywhere interactive.

@@ -42,7 +42,7 @@ The ladder in architecture.md §6 was written for ~2.5 weeks. Compressed, it bec
 | Stage | Days | Contents | Status |
 |---|---|---|---|
 | **A — Spine** | 1–4 | Script upload → Gemini parse → causality graph on React Flow → load scores → what-if re-run → one Parallel search with visible citations → deployed on Cloud Run | **Non-negotiable.** This alone is a submittable product. |
-| **B — Depth** | 5–6 | Note reconciliation dashboard **OR** character/world bible — pick one on the morning of Day 5, build the other never | Build |
+| **B — Depth** | 5–6 | **Story Circle agent** (cheap, ~4h) **plus** note reconciliation dashboard **OR** character/world bible — pick one of the latter two on the morning of Day 5, build the other never | Build |
 | **C — Trust & polish** | 7 | Cached Imagen storyboards + 2 Veo clips, Tier 1 annotations, Researcher citations promoted in UI, visual polish pass | Build |
 | **D — Submission** | 8 | Video, README, hosted-URL verification, submit **a full day early** | **Non-negotiable.** |
 | **— cut line —** | | | |
@@ -102,6 +102,33 @@ Goal: compliance requirement #1 is satisfied and *looks* good.
 
 **Done-check:** a scene panel shows a fact-check verdict with real, clickable Parallel citations. **Stage A complete — the project is now submittable.**
 
+### Day 5a — Story Circle agent (~4h)
+
+Added after Days 1–4 landed early. It earns its place on cost: it is **one more Flash
+pass over the beat sheet we already have**, needs no new infrastructure, no new data
+source and no new UI framework — and it fills the one hole the causality graph cannot
+reach. Story Logic judges joints; nothing in the product currently judges the *shape*.
+
+- **5a-1 (1.5h)** `circlePass`: classify every scene to one of the 8 steps
+  (You/Need/Go/Search/Find/Take/Return/Change) with a confidence and a one-line reason.
+  Same structured-output discipline as the causality pass.
+- **5a-2 (1h)** Structural diagnostics as ordinary flags: missing step, disproportionate
+  step, late **Go**, compressed **Return**. Proportions are computed in tested pure code
+  from the assignments — the model classifies, arithmetic judges. This matters: the
+  numbers in "Search occupies 41% of your pages" must never be model-generated.
+- **5a-3 (1.5h)** The wheel: scenes distributed around the 8 segments, order/chaos axis
+  visible, threshold crossings marked. This is the most screenshot-able artefact in the
+  product and costs almost nothing given the classification already exists.
+
+**Guard against the obvious failure:** the circle must be a *reading*, not a verdict.
+The writer can re-assign a scene to another step, exactly like a writer-confirmed causal
+edge. Non-linear and ensemble scripts will confound step assignment; proportions stay
+meaningful even when individual assignments are shaky, so lead the UI with proportions.
+
+**Cut rule:** if Day 5a runs past ~5h, ship the diagnostics without the wheel — the flags
+carry the value, the wheel carries the demo. Do not let it eat the Day 5 depth feature,
+which is still the market-unique one.
+
 ### Day 5 (Sep 4) — Depth: pick ONE. ~10h
 
 Decide in the morning, in writing, then don't revisit:
@@ -127,7 +154,7 @@ Decide in the morning, in writing, then don't revisit:
 ### Day 7 (Sep 6) — Previz, polish, and the sample script. ~10h
 
 - **7-1 (3h)** **Pre-generate and cache all Imagen 3 storyboard panels and 2 Veo clips.** Never live-generate in the demo — latency and cost are both unacceptable on camera. This is the default posture in architecture.md §5, not a fallback.
-- **7-2 (2h)** Wire cached previz into the UI, selected by load score (load-bearing scenes get the Veo clips — this closes the loop between the analysis and the visuals).
+- **7-2 (2h)** Wire cached previz into the UI, selected by load score **crossed with Story Circle position** — a scene that is both load-bearing and the **Take** or **Find** is a better Veo candidate than the top load score alone, which cannot distinguish a structurally meaningful scene from a merely well-connected one.
 - **7-3 (3h)** Visual polish pass: canvas layout, right-side inspector, bottom activity/log strip. The Design judging criterion is a full quarter of the score and this is the only day allocated to it.
 - **7-4 (2h)** Finalize the **sample script — original content only, no third-party IP.** Flagged in architecture.md §7 as "don't leave for the last day"; if Day 1–6 slipped, this is the thing most likely to have been skipped, so it is re-listed here as a hard gate.
 
@@ -135,7 +162,7 @@ Decide in the morning, in writing, then don't revisit:
 
 Target: submitted by midday PT, not at 1:59 PM.
 
-- **8-1 (3h)** Demo video, ≤3 min, English. Beat sheet: problem (20s) → upload & causal graph (30s) → **what-if hero moment (15s)** → Story Logic therefore/but named on screen (10s) → cited Researcher fact-check (20s) → note reconciliation (20s) → previz (15s) → collab moment, two windows (15s) → efficiency line, *"a structure pass that took a $300 coverage service two weeks — in ninety seconds, on every draft"* (15s). Show agents **working**, not a cinematic trailer — the rules require it.
+- **8-1 (3h)** Demo video, ≤3 min, English. Beat sheet: problem (20s) → upload & causal graph (30s) → **what-if hero moment (15s)** → Story Logic therefore/but named on screen (10s) → **Story Circle wheel with the sagging-act diagnostic (15s)** → cited Researcher fact-check (20s) → note reconciliation (15s) → previz (10s) → collab moment, two windows (15s) → efficiency line, *"a structure pass that took a $300 coverage service two weeks — in ninety seconds, on every draft"* (15s). Show agents **working**, not a cinematic trailer — the rules require it.
 - **8-2 (1.5h)** README: architecture diagram, agent roster, explicit "Google Cloud called at runtime / Parallel called at runtime" evidence section with file-and-line pointers.
 - **8-3 (1h)** Full compliance sweep (§6 checklist), including `grep -ri "openai\|anthropic\|@aws\|azure" --include=package.json --include=*.ts` over the whole tree.
 - **8-4 (1h)** Verify the hosted URL from a logged-out browser on a different network. The classic failure is an app that only works on the builder's machine.

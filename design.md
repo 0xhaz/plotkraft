@@ -41,6 +41,7 @@ Research into professional/freelance screenwriter pain points ranked these as th
 |---|---|---|---|
 | **Note reconciliation dashboard** — upload notes from multiple sources, auto-pin to scenes, flag contradictions between notes | #1 pain (note fatigue); nothing on market does it | HIGH / HIGH (text classification + pinning to existing cards) | **Build (Stage 2)** |
 | **Character/world bible auto-extraction** — living bible of established facts; later scenes contradicting an earlier fact get flagged | #3 pain; mirrors script-coordinator job | HIGH / MED (Gemini extraction pass feeding Continuity agent) | **Build (Stage 2)** |
+| **Story Circle map** — every scene placed on Harmon's 8 steps; flags missing steps, a late threshold, and disproportionate acts ("Search is 41% of your pages") | #2 pain (structure), at an altitude the causal graph cannot reach | HIGH / HIGH (one Flash pass over the beat sheet we already have; no new infrastructure) | **Build (Stage 2)** |
 | **Setup/payoff tracker** — setups never paid off, payoffs never set up | Subplot-dropped failure mode | MED-HIGH / MED (extension of causal edges) | Stretch |
 | **Logline generator from causal graph** — refreshes as story changes (protagonist, goal, central "but") | #6 pain, freelance delight | MED / HIGH (cheap) | Stretch |
 | **Canvas snapshot diff** — visual diff between drafts (scenes added/cut/reordered, edges broken) | #4 pain (version chaos) | MED / MED (Firestore snapshots) | Stretch |
@@ -82,4 +83,4 @@ Research into professional/freelance screenwriter pain points ranked these as th
 | Technological Implementation | Multi-agent orchestration; Parallel + Gemini + Veo genuinely called at runtime |
 | Design | Canvas-first complete product; annotations + (stretch) live cursors; polished demo flow |
 | Potential Impact | Research-validated pains: note fatigue (#1), structure (#2), continuity (#3); freelancers get a $0 always-on diagnostic room vs. $60–$1,500 coverage; diagnostic-not-oracle framing |
-| Quality of the Idea | "South Park writers' room causality test as an agent" + note-contradiction detection (unserved) + Veo previz of load-bearing beats — memorable, non-obvious, on-theme |
+| Quality of the Idea | Two frameworks writers already argue about, made executable: the South Park "therefore/but" test for micro joints and **Harmon's Story Circle for macro shape** — plus note-contradiction detection (unserved) and Veo previz of load-bearing beats. Memorable, non-obvious, on-theme, and native to the craft rather than generic AI analysis |
