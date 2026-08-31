@@ -1,6 +1,6 @@
 # Plotkraft — Workplan (8-day compressed build)
 
-> Part of the Plotkraft doc set: design.md (what & why) · techstacks.md (tools & SDKs) · architecture.md (system & build plan) · **workplan.md** (this file — who does what, when, and what gets cut).
+> Part of the Plotkraft doc set: design.md (what & why) · techstacks.md (tools & SDKs) · architecture.md (system & build plan) · **workplan.md** (this file — who does what, when, and what gets cut) · DEMO.md (recording the video).
 > Written Aug 30, 2026, 19:30 MYT. Working deadline: **Sep 7, 2026, 2:00 PM PT = Sep 8, 5:00 AM MYT**. Treat Sep 9 as a rumor until confirmed; build to Sep 7.
 > Solo build. Every estimate below is *solo* hours, and assumes ~10 productive hours/day for 8 days ≈ 80 hours total. The plan below budgets ~68, leaving ~15% slack. That slack will be consumed; do not spend it in advance.
 

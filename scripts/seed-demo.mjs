@@ -75,6 +75,7 @@ async function main() {
   const { projectId, sceneCount } = await post('/projects/import', {
     source,
     title: 'The Quiet Part',
+    mode: 'original',
   });
   done(`${sceneCount} scenes`);
 
@@ -109,8 +110,46 @@ async function main() {
     done(`skipped (${String(err.message).slice(0, 80)})`);
   }
 
-  console.log(`\n  Canvas: ${WEB}/project/${projectId}`);
-  console.log('  Sign in with "Dev sign-in" to open it.\n');
+  step('sequences');
+  const seq = await post(`/projects/${projectId}/agents/sequences`);
+  done(`${seq.sequences} named sequences`);
+
+  step('Continuity (bible + contradictions)');
+  const cont = await post(`/projects/${projectId}/agents/continuity`);
+  done(`${cont.facts} facts, ${cont.compared} compared, ${cont.contradictions} flagged`);
+
+  // Rate-limited and pre-generated on purpose: never drawn during a demo.
+  step('storyboard panels');
+  try {
+    const boards = await post(`/projects/${projectId}/agents/boards`, { panels: 6 });
+    done(`${boards.drawn} of ${boards.requested} drawn`);
+  } catch (err) {
+    done(`skipped (${String(err.message).slice(0, 80)})`);
+  }
+
+  // A second project in reference mode, so the Craft agent has somewhere to run.
+  // Same original screenplay: the demo must not put anyone else's work on screen.
+  console.log('');
+  step('reference copy for the Craft agent');
+  const ref = await post('/projects/import', {
+    source,
+    title: 'The Quiet Part — reference',
+    mode: 'reference',
+  });
+  done(`${ref.sceneCount} scenes`);
+
+  step('Story Circle on the reference');
+  await post(`/projects/${ref.projectId}/agents/story-circle`);
+  done();
+
+  step('Craft (what makes it work)');
+  const craft = await post(`/projects/${ref.projectId}/agents/craft`);
+  done(`${craft.lessons} scenes annotated`);
+
+  console.log(`\n  Your draft   ${WEB}/project/${projectId}`);
+  console.log(`  Script view  ${WEB}/project/${projectId}/script`);
+  console.log(`  Reference    ${WEB}/project/${ref.projectId}`);
+  console.log('\n  Sign in with "Dev sign-in" to open them.\n');
 }
 
 main().catch((err) => {
