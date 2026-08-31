@@ -11,6 +11,8 @@ import { StoryCircleService } from './story-circle.service';
 import { NotesService } from './notes.service';
 import { CraftService } from './craft.service';
 import { SequencesService } from './sequences.service';
+import { ContinuityService } from './continuity.service';
+import { PrevizService } from './previz.service';
 import type { NoteSource } from './notes';
 
 @Controller('projects/:id/agents')
@@ -27,6 +29,8 @@ export class AgentsController {
     private readonly membership: MembershipService,
     private readonly craft: CraftService,
     private readonly sequences: SequencesService,
+    private readonly continuity: ContinuityService,
+    private readonly previz: PrevizService,
   ) {}
 
   /** Which agents can actually run right now — surfaced so the UI never fakes readiness. */
@@ -80,6 +84,24 @@ export class AgentsController {
   async runSequences(@Param('id') id: string, @Uid() uid: string) {
     await this.membership.assertMember(id, uid);
     return this.sequences.analyze(id);
+  }
+
+  /** Build the script bible and flag later scenes that contradict it. */
+  @Post('continuity')
+  async runContinuity(@Param('id') id: string, @Uid() uid: string) {
+    await this.membership.assertMember(id, uid);
+    return this.continuity.analyze(id);
+  }
+
+  /** Storyboard panels for the scenes the agents say carry the film. */
+  @Post('boards')
+  async runBoards(
+    @Param('id') id: string,
+    @Body() body: { panels?: number },
+    @Uid() uid: string,
+  ) {
+    await this.membership.assertMember(id, uid);
+    return this.previz.generate(id, body?.panels ?? 8);
   }
 
   @Post('research')

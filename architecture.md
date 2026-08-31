@@ -13,7 +13,7 @@
 | **Story Circle (Structure)** | Maps every scene onto Dan Harmon's 8-step circle (You/Need/Go/Search/Find/Take/Return/Change); reports missing steps, mis-ordered steps, and disproportionate ones ("Search runs 41% of your pages"). Macro complement to Story Logic's micro joints | Gemini classification over the beat sheet |
 | **Notes** | Ingests pasted/uploaded notes from multiple sources (producer, exec, peer, coverage), maps each note to affected scene(s), pins to canvas cards, flags where two notes contradict each other | Gemini classification + canvas pinning |
 | **Comparables** | Pulls live data on comparable films, genre beat-structure norms ("comps hit first reversal by p.12, yours at p.31"), festival/box-office context | Parallel Search API |
-| **Previz** | Two tiers: **Imagen 3 storyboard panels** for many scenes (cheap, fast — explicitly pitched in hackathon resources) + **Veo animatic clips** for the 2–3 top load-bearing scenes | Vertex AI Imagen 3 + Veo |
+| **Previz** | Storyboard panels for the scenes the agents say carry the film, chosen by load score crossed with circle position and spread across the script so the board shows its shape | **`gemini-2.5-flash-image`** on Vertex — see model-availability note below |
 | **Table Read** (stretch) | "Hear this scene" — multi-speaker Gemini TTS reads the dialogue aloud (writers validate dialogue by ear; mirrors real table reads) | Gemini TTS multi-speaker |
 
 Orchestration: Gemini function-calling orchestrator (`@google/genai`); agents run as tool-equipped sub-calls. Working skeleton: `researcher-agent-spike.ts` (type-checked plan→search→extract→synthesize loop).
@@ -105,6 +105,29 @@ Principle: get multiplayer safety from **data-model design**, not CRDTs (collab 
 | **Live listeners + snapshots** | `onSnapshot` on project keeps every canvas seconds-fresh (conflicts mostly come from stale views); canvas snapshots (the draft-diff feature) double as restore escape hatch | Shrinks conflict window to near zero; recovery story if anything slips through |
 
 **Week-one data-model prerequisites** (painful to retrofit): stable scene IDs + stored edge lists (dirty-subgraph computation), `version` field on scene docs, append-only subcollection layout, flag-suppression collection (dismissal learning).
+
+### 4b. Model availability on this project (verified Aug 31)
+
+Probed directly against Vertex in `us-central1` rather than assumed:
+
+| Model | Status |
+|---|---|
+| `gemini-2.5-flash` / `gemini-2.5-pro` | ✅ available — all text agents |
+| `gemini-2.5-flash-image` | ✅ available — returns real PNG bytes; storyboard panels |
+| Imagen (`imagen-3.0-*`, `imagen-4.0-*`, `imagegeneration@00x`) | ❌ 404 — no access on this project |
+| Veo (`veo-2.0`, `veo-3.0`, `veo-3.1`) | ❌ 404 — no access on this project |
+
+Two consequences. The plan's "Imagen 3 panels" is unavailable, but Gemini's native
+image generation does the same job through the same SDK and auth, so previz is not
+blocked. **Veo is blocked**: access needs to be requested and approved, which has
+lead time. Until that lands, the Veo animatic tier of the pitch does not exist and
+the submission should not claim it.
+
+**Rate limits are the real constraint, not cost.** Three concurrent panels returned
+429 `RESOURCE_EXHAUSTED`, and short retries still lost one of four. Boards are
+generated one at a time with backoff up to ~64s: previz is pre-generated and cached
+(never drawn during a demo), so completeness matters and speed does not. Six panels
+take under a minute.
 
 ## 5. Reliability fallbacks
 
