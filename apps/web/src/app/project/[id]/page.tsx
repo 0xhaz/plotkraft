@@ -3,6 +3,7 @@
 import { use } from 'react';
 import Link from 'next/link';
 import { Canvas } from '@/components/Canvas';
+import { ProjectHeader } from '@/components/ProjectHeader';
 import { useAuth } from '@/lib/useAuth';
 
 export default function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
@@ -22,22 +23,9 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
 
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: '#0f1216' }}>
-      <header
-        style={{
-          display: 'flex', alignItems: 'center', gap: 14, padding: '10px 16px',
-          borderBottom: '1px solid #222831', color: '#e8eaed',
-          fontFamily: 'ui-sans-serif, system-ui, sans-serif', fontSize: 13,
-        }}
-      >
-        <Link href="/" style={{ color: '#7aa2e3', textDecoration: 'none', fontWeight: 600 }}>
-          Plotkraft
-        </Link>
-        <span style={{ color: '#4a5260' }}>/</span>
-        <Link href="/new" style={{ color: '#9aa4b2', textDecoration: 'none' }}>new</Link>
-        <span style={{ color: '#4a5260' }}>/</span>
-        <span style={{ color: '#9aa4b2' }}>canvas</span>
+      <ProjectHeader projectId={id} view="board">
         <Legend />
-      </header>
+      </ProjectHeader>
       <div style={{ flex: 1, minHeight: 0 }}>
         <Canvas projectId={id} />
       </div>
