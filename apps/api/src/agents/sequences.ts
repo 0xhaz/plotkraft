@@ -80,55 +80,63 @@ export function normalizeSequences(raw: RawSequence[], sceneCount: number): Sequ
 }
 
 /**
- * Give each sequence the act most of its scenes belong to.
+ * Assign acts to sequences as two boundaries, not as independent votes.
  *
- * The first version split a sequence wherever the per-scene act changed. That
- * assumed acts arrive in clean contiguous runs, which they do not: step
- * placement on an intercut feature wobbles scene to scene, and a real 244-scene
- * script turned 16 sequences into 55 fragments — worse than the flat board it
- * was meant to replace.
+ * A per-sequence majority vote was the obvious approach and it is wrong: acts
+ * are contiguous by definition, and voting independently let them zig-zag. A
+ * real script produced an Act One containing sequences 1, 2, 3, 4, 6 and 10 —
+ * an outline that cannot be true, because a story does not return to its first
+ * act after leaving it.
  *
- * So the hierarchy runs the other way. The sequence is the contiguous unit,
- * because it is a run of consecutive scenes by construction; an act is simply
- * the run of sequences that mostly sit in it. A majority vote is stable against
- * the same wobble that shattered the splitting version.
+ * So the act structure is one choice with two degrees of freedom: where Act One
+ * ends and where Act Three begins. Every split is scored against the per-scene
+ * placements the circle produced, and the best-fitting pair wins. With a dozen
+ * sequences the search is trivial, and the result is contiguous by construction
+ * rather than by hope.
  */
 export function assignActs(
   sequences: Sequence[],
   actOfScene: (index: number) => number,
 ): Sequence[] {
-  return sequences.map((seq) => {
-    const votes = new Map<number, number>();
+  if (sequences.length === 0) return [];
+
+  // votes[k][a] = how many scenes of sequence k the circle placed in act a.
+  const votes = sequences.map((seq) => {
+    const counts = [0, 0, 0, 0];
     for (let i = seq.startIndex; i <= seq.endIndex; i++) {
       const act = actOfScene(i);
-      votes.set(act, (votes.get(act) ?? 0) + 1);
+      if (act >= 0 && act <= 3) counts[act] += 1;
     }
-
-    let act = 0;
-    let best = -1;
-    for (const [candidate, count] of votes) {
-      // Ties go to the earlier act, so a sequence on a boundary reads as the
-      // end of what came before rather than the start of what follows.
-      if (count > best || (count === best && candidate !== 0 && candidate < act)) {
-        act = candidate;
-        best = count;
-      }
-    }
-
-    // An entirely unplaced sequence stays unplaced; a mostly-placed one takes
-    // the act its placed scenes agree on rather than being written off.
-    if (act === 0 && votes.size > 1) {
-      let bestPlaced = -1;
-      for (const [candidate, count] of votes) {
-        if (candidate !== 0 && count > bestPlaced) {
-          act = candidate;
-          bestPlaced = count;
-        }
-      }
-    }
-
-    return { ...seq, act };
+    return counts;
   });
+
+  const n = sequences.length;
+  let bestI = 1;
+  let bestJ = n;
+  let bestScore = -1;
+
+  // Sequences [0,i) are Act One, [i,j) Act Two, [j,n) Act Three. Empty acts are
+  // allowed: a script may genuinely lack a third act, and inventing one would
+  // hide exactly the finding worth reporting.
+  for (let i = 0; i <= n; i++) {
+    for (let j = i; j <= n; j++) {
+      let score = 0;
+      for (let k = 0; k < n; k++) {
+        const act = k < i ? 1 : k < j ? 2 : 3;
+        score += votes[k][act];
+      }
+      if (score > bestScore) {
+        bestScore = score;
+        bestI = i;
+        bestJ = j;
+      }
+    }
+  }
+
+  return sequences.map((seq, k) => ({
+    ...seq,
+    act: k < bestI ? 1 : k < bestJ ? 2 : 3,
+  }));
 }
 
 export function sequenceLength(seq: Sequence): number {

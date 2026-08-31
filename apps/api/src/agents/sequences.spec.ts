@@ -87,53 +87,65 @@ describe('normalizeSequences', () => {
 });
 
 describe('assignActs', () => {
-  // Scenes 0-3 in act 1, 4-7 in act 2.
-  const clean = (i: number) => (i <= 3 ? 1 : 2);
+  const mk = (ranges: [number, number][]) =>
+    ranges.map(([a, b], i) => ({ ...seq(a, b, `S${i}`), purpose: '' }));
 
-  it('gives a sequence the act most of its scenes are in', () => {
-    const r = assignActs([{ ...seq(0, 5, 'Mostly one'), purpose: '' }], clean);
-    expect(r[0].act).toBe(1);
+  /** Acts must never go backwards across the script. */
+  function isContiguous(result: Sequence[]): boolean {
+    let last = 0;
+    for (const s of result) {
+      if ((s.act ?? 0) < last) return false;
+      last = s.act ?? 0;
+    }
+    return true;
+  }
+
+  it('follows clean per-scene placement', () => {
+    const clean = (i: number) => (i < 10 ? 1 : i < 30 ? 2 : 3);
+    const r = assignActs(mk([[0, 9], [10, 29], [30, 39]]), clean);
+    expect(r.map((s) => s.act)).toEqual([1, 2, 3]);
+  });
+
+  it('never lets an act come back after it has passed', () => {
+    // The real failure: independent votes produced an Act One containing
+    // sequences 1,2,3,4,6,10 — a story does not return to its first act.
+    const zigzag = (i: number) => {
+      const bucket = Math.floor(i / 10);
+      return [1, 2, 1, 3, 2, 1][bucket % 6];
+    };
+    const r = assignActs(mk([[0, 9], [10, 19], [20, 29], [30, 39], [40, 49], [50, 59]]), zigzag);
+    expect(isContiguous(r)).toBe(true);
+  });
+
+  it('stays contiguous when placement wobbles scene to scene', () => {
+    const wobbly = (i: number) => (i % 2 === 0 ? 1 : 3);
+    const r = assignActs(mk([[0, 19], [20, 39], [40, 59]]), wobbly);
+    expect(isContiguous(r)).toBe(true);
   });
 
   it('does not fragment a sequence that straddles a boundary', () => {
-    const r = assignActs([{ ...seq(0, 7, 'Straddler'), purpose: '' }], clean);
+    const clean = (i: number) => (i <= 3 ? 1 : 2);
+    const r = assignActs(mk([[0, 7]]), clean);
     expect(r).toHaveLength(1);
     expect(r[0].startIndex).toBe(0);
     expect(r[0].endIndex).toBe(7);
   });
 
-  it('survives act assignment that wobbles scene to scene', () => {
-    // The failure that mattered: on an intercut feature the per-scene act
-    // alternates, and splitting on every change turned 16 sequences into 55.
-    const wobbly = (i: number) => (i % 2 === 0 ? 1 : 2);
-    const r = assignActs(
-      [
-        { ...seq(0, 19, 'One'), purpose: '' },
-        { ...seq(20, 39, 'Two'), purpose: '' },
-      ],
-      wobbly,
-    );
-    expect(r).toHaveLength(2);
+  it('leaves an act empty rather than inventing one', () => {
+    // A script with no third act is a finding, not something to paper over.
+    const twoActs = (i: number) => (i < 20 ? 1 : 2);
+    const r = assignActs(mk([[0, 19], [20, 39]]), twoActs);
+    expect(r.map((s) => s.act)).toEqual([1, 2]);
   });
 
-  it('keeps an entirely unplaced sequence unplaced', () => {
-    const r = assignActs([{ ...seq(0, 3, 'Nowhere'), purpose: '' }], () => 0);
-    expect(r[0].act).toBe(0);
-  });
-
-  it('takes the act its placed scenes agree on when some are unplaced', () => {
-    const patchy = (i: number) => (i < 2 ? 0 : 3);
-    const r = assignActs([{ ...seq(0, 3, 'Patchy'), purpose: '' }], patchy);
-    expect(r[0].act).toBe(3);
-  });
-
-  it('leaves the ranges untouched', () => {
-    const input = [
-      { ...seq(0, 5, 'One'), purpose: '' },
-      { ...seq(6, 7, 'Two'), purpose: '' },
-    ];
-    const r = assignActs(input, clean);
+  it('keeps full coverage', () => {
+    const clean = (i: number) => (i <= 3 ? 1 : 2);
+    const r = assignActs(mk([[0, 5], [6, 7]]), clean);
     expect(coversExactly(r, 8)).toBe(true);
+  });
+
+  it('handles an empty script', () => {
+    expect(assignActs([], () => 1)).toEqual([]);
   });
 });
 

@@ -285,6 +285,9 @@ export function Canvas({ projectId }: { projectId: string }) {
         .map((s) => ({
         id: s.id,
         type: 'scene',
+        // Bands are drawn in the same viewport layer and would otherwise paint
+        // over the cards, veiling the text and swallowing selection.
+        zIndex: 10,
         position: acts?.positions.get(s.id) ?? s.position ?? { x: 0, y: 0 },
         data: {
           heading: s.heading,
@@ -511,8 +514,9 @@ function Bands({
             height: b.height,
             border: `1px solid ${b.act === 0 ? '#2a2f38' : '#243040'}`,
             borderRadius: 14,
-            background: b.act === 0 ? '#14161acc' : '#121821cc',
+            background: b.act === 0 ? '#14161a' : '#121821',
             pointerEvents: 'none',
+            zIndex: 0,
           }}
         >
           <button
@@ -538,8 +542,9 @@ function Bands({
             height: q.height,
             border: '1px solid #1f2833',
             borderRadius: 10,
-            background: q.collapsed ? '#151a21cc' : '#12161ccc',
+            background: q.collapsed ? '#151a21' : '#12161c',
             pointerEvents: 'none',
+            zIndex: 1,
           }}
         >
           <button onClick={() => onToggleSeq(q.order)} style={BAND.seqHeader}>
