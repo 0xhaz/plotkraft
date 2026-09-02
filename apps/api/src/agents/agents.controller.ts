@@ -97,11 +97,20 @@ export class AgentsController {
   @Post('boards')
   async runBoards(
     @Param('id') id: string,
-    @Body() body: { panels?: number },
+    @Body()
+    body: {
+      panels?: number;
+      /** Board exactly these scenes, in order. */
+      sceneIds?: string[];
+      /** Or spread the panel budget across one act. */
+      act?: number;
+      fromIndex?: number;
+      toIndex?: number;
+    },
     @Uid() uid: string,
   ) {
     await this.membership.assertMember(id, uid);
-    return this.previz.generate(id, body?.panels ?? 8);
+    return this.previz.generate(id, body ?? {});
   }
 
   @Post('research')

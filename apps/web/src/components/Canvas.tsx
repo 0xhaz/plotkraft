@@ -17,6 +17,7 @@ import {
   collection, doc, onSnapshot, orderBy, query, updateDoc, writeBatch,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { stalePanels, countStale } from '@/lib/staleness';
 import {
   serpentinePosition, actLayout, outlineLayout, CARD_W, GAP_X, COLUMNS, LARGE_SCRIPT,
   type ActBand, type Act, type SequenceBand, type SequenceMeta,
@@ -31,6 +32,7 @@ import {
   reconcileNotes,
   runCraftAnalysis,
   findSequences,
+  generateBoards,
   type WhatIfImpact,
   type CircleResult,
 } from '@/lib/whatIf';
@@ -42,6 +44,9 @@ interface SceneDoc extends SceneDetail {
   position: { x: number; y: number };
   flagCount?: number;
   noteCount?: number;
+  boardPath?: string;
+  boardVersion?: number;
+  shot?: { size: string; angle: string; movement: string };
 }
 
 interface EdgeDoc {
@@ -177,6 +182,25 @@ export function Canvas({ projectId }: { projectId: string }) {
     }
   };
 
+  /** Board a scope: the selected scenes if any, otherwise the whole script. */
+  const runBoards = async () => {
+    setBusy('boards');
+    setError(null);
+    try {
+      const res = await generateBoards(
+        projectId,
+        selected.length > 0 ? { sceneIds: selected } : { panels: 8 },
+      );
+      if (res.failed > 0) {
+        setError(`${res.drawn} of ${res.requested} panels drawn — the image model rate-limited the rest. Run again to fill the gaps.`);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'boarding failed');
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const runCraft = async () => {
     setBusy('craft');
     setError(null);
@@ -278,6 +302,28 @@ export function Canvas({ projectId }: { projectId: string }) {
     });
   }, []);
 
+  /** Which panels the last rewrite invalidated — see lib/staleness.ts. */
+  const stale = useMemo(
+    () =>
+      stalePanels(
+        scenes.map((s) => ({
+          id: s.id,
+          version: s.version ?? 1,
+          boardVersion: s.boardVersion,
+          boardPath: s.boardPath,
+        })),
+        edgeDocs.map((e) => ({
+          fromSceneId: e.fromSceneId,
+          toSceneId: e.toSceneId,
+          type: e.type,
+        })),
+      ),
+    [scenes, edgeDocs],
+  );
+
+  const staleCount = useMemo(() => countStale(stale), [stale]);
+  const boardedCount = useMemo(() => scenes.filter((s) => s.boardPath).length, [scenes]);
+
   const derivedNodes: Node<SceneNodeData>[] = useMemo(
     () =>
       scenes
@@ -296,12 +342,19 @@ export function Canvas({ projectId }: { projectId: string }) {
           flagCount: s.flagCount ?? 0,
           noteCount: s.noteCount ?? 0,
           status: mode === 'original' ? (s.status ?? 'draft') : undefined,
+          boardPath: s.boardPath,
+          boardStale: stale.has(s.id),
+          shotSlug: s.shot
+            ? [s.shot.size, s.shot.angle, s.shot.movement !== 'static' ? s.shot.movement : null]
+                .filter(Boolean)
+                .join(' · ')
+            : undefined,
           impact: impactFor.get(s.id) ?? null,
           selected: selected.includes(s.id),
           loadDelta: deltaFor.get(s.id),
         },
       })),
-    [scenes, impactFor, selected, deltaFor, acts, mode],
+    [scenes, impactFor, selected, deltaFor, acts, mode, stale],
   );
 
   // React Flow needs to own node state for dragging to do anything. Firestore
@@ -442,6 +495,10 @@ export function Canvas({ projectId }: { projectId: string }) {
         mode={mode}
         onCraft={runCraft}
         onSequences={runSequences}
+        onBoards={runBoards}
+        boardedCount={boardedCount}
+        staleDirect={staleCount.direct}
+        staleUpstream={staleCount.upstream}
         sequenceCount={sequences.length}
         onNotes={() => { setNotesOpen(true); setCircle(null); }}
         onTidy={tidy}
@@ -602,6 +659,10 @@ function Inspector(props: {
   onCraft: () => void;
   onSequences: () => void;
   sequenceCount: number;
+  onBoards: () => void;
+  boardedCount: number;
+  staleDirect: number;
+  staleUpstream: number;
   onNotes: () => void;
   onTidy: () => void;
   byAct: boolean;
@@ -623,6 +684,31 @@ function Inspector(props: {
       <button onClick={props.onCausality} disabled={props.busy !== null} style={P.button}>
         {props.busy === 'causality' ? 'Analyzing…' : 'Run Story Logic'}
       </button>
+
+      <button
+        onClick={props.onBoards}
+        disabled={props.busy !== null}
+        style={{ ...P.button, background: '#7a4bbf' }}
+      >
+        {props.busy === 'boards'
+          ? 'Drawing…'
+          : props.selected.length > 0
+            ? `Board ${props.selected.length} selected`
+            : props.boardedCount > 0
+              ? `Re-board (${props.boardedCount} drawn)`
+              : 'Draw storyboard'}
+      </button>
+
+      {(props.staleDirect > 0 || props.staleUpstream > 0) && (
+        <div style={P.stale}>
+          {props.staleDirect > 0 && (
+            <div><strong style={{ color: '#f08a8a' }}>{props.staleDirect}</strong> panel{props.staleDirect === 1 ? '' : 's'} out of date — the scene was rewritten</div>
+          )}
+          {props.staleUpstream > 0 && (
+            <div style={{ marginTop: 3 }}><strong style={{ color: '#d08a3e' }}>{props.staleUpstream}</strong> still accurate, but the story upstream changed</div>
+          )}
+        </div>
+      )}
 
       <button
         onClick={props.onSequences}
@@ -777,6 +863,10 @@ const P: Record<string, React.CSSProperties> = {
     padding: '8px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer',
   },
   hint: { color: '#9aa4b2', fontSize: 11, lineHeight: 1.5 },
+  stale: {
+    background: '#1a1418', border: '1px solid #33222a', borderRadius: 7,
+    padding: '8px 10px', fontSize: 11, lineHeight: 1.5, color: '#c7cdd6',
+  },
   error: { color: '#e07070', fontSize: 11, lineHeight: 1.45 },
   results: { borderTop: '1px solid #222831', paddingTop: 8 },
   warnBlock: { color: '#f0b48a', fontSize: 11, marginTop: 6, lineHeight: 1.45 },

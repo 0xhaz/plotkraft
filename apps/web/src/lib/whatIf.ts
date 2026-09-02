@@ -121,3 +121,19 @@ export async function findSequences(
   }
   return res.json();
 }
+
+export async function generateBoards(
+  projectId: string,
+  scope: { panels?: number; sceneIds?: string[]; act?: number },
+): Promise<{ requested: number; drawn: number; failed: number }> {
+  const res = await authedFetch(`${API_BASE}/projects/${projectId}/agents/boards`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(scope),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.message ?? `boarding failed (${res.status})`);
+  }
+  return res.json();
+}

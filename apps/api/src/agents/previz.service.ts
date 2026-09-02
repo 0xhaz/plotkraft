@@ -1,9 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { getStorage } from 'firebase-admin/storage';
 import { FirebaseService } from '../firebase/firebase.service';
-import { GeminiService } from './gemini.service';
+import { GeminiService, MODELS } from './gemini.service';
+import { actOfStep } from './story-circle';
 import { selectForBoards, type BoardCandidate } from './previz';
 import { mapWithLimit } from './throttle';
+import { SHOTS_SCHEMA, SHOTS_SYSTEM, buildShotsPrompt } from './shot.prompt';
+import { shotToComposition, type Shot } from './shot';
 
 /** Gemini's native image model. Imagen is not available on this project. */
 const IMAGE_MODEL = 'gemini-2.5-flash-image';
@@ -30,8 +33,9 @@ export class PrevizService {
 
   async generate(
     projectId: string,
-    panels = 8,
+    options: { panels?: number; sceneIds?: string[]; act?: number; fromIndex?: number; toIndex?: number } = {},
   ): Promise<{ requested: number; drawn: number; failed: number }> {
+    const panels = options.panels ?? 8;
     const projectRef = this.fb.db.collection('projects').doc(projectId);
     const snap = await projectRef.collection('scenes').orderBy('index').get();
 
@@ -47,8 +51,31 @@ export class PrevizService {
       };
     });
 
-    const chosen = selectForBoards(candidates, panels);
+    // Scoping comes before selection, so "board Act Two" spreads its panels
+    // across Act Two rather than across the whole film.
+    let scoped = candidates;
+    if (options.sceneIds?.length) {
+      const wanted = new Set(options.sceneIds);
+      scoped = candidates.filter((c) => wanted.has(c.sceneId));
+    } else if (options.act) {
+      scoped = candidates.filter((c) => actOfStep(c.circleStep) === options.act);
+    } else if (options.fromIndex !== undefined || options.toIndex !== undefined) {
+      const from = options.fromIndex ?? 0;
+      const to = options.toIndex ?? Number.MAX_SAFE_INTEGER;
+      scoped = candidates.filter((c) => c.index >= from && c.index <= to);
+    }
+
+    // An explicit list of scenes is a request, not a suggestion: board exactly
+    // those, in order, rather than ranking them down to a panel budget.
+    const chosen = options.sceneIds?.length
+      ? scoped.sort((a, b) => a.index - b.index)
+      : selectForBoards(scoped, panels);
+
     if (chosen.length === 0) return { requested: 0, drawn: 0, failed: 0 };
+
+    // One batched call gives every chosen scene its camera before any drawing
+    // starts; the shot then drives both the image and the label under it.
+    const shots = await this.chooseShots(chosen);
 
     const bucket = getStorage().bucket(
       process.env.GCS_BUCKET ?? `${process.env.GCP_PROJECT_ID}.firebasestorage.app`,
@@ -63,10 +90,11 @@ export class PrevizService {
     const settled = await mapWithLimit(
       chosen,
       async (scene) => {
-        const png = await this.draw(scene);
+        const shot = shots.get(scene.index);
+        const png = await this.draw(scene, shot);
         const path = `projects/${projectId}/boards/${scene.sceneId}.png`;
         await bucket.file(path).save(png, { contentType: 'image/png' });
-        return { scene, path };
+        return { scene, path, shot };
       },
       { limit: 1, retries: 5, baseDelayMs: 4000 },
     );
@@ -81,10 +109,16 @@ export class PrevizService {
         this.log.warn(`previz: panel failed — ${outcome.reason}`);
         continue;
       }
-      const { scene, path } = outcome.value;
+      const { scene, path, shot } = outcome.value;
       const doc = byId.get(scene.sceneId);
       if (!doc) continue;
-      batch.update(doc.ref, { boardPath: path, boardAt: Date.now() });
+      batch.update(doc.ref, {
+        boardPath: path,
+        boardAt: Date.now(),
+        // Stamped so a later edit can tell this panel is out of date.
+        boardVersion: Number(doc.data().version ?? 1),
+        ...(shot ? { shot } : {}),
+      });
       drawn++;
     }
 
@@ -93,10 +127,38 @@ export class PrevizService {
     return { requested: chosen.length, drawn, failed };
   }
 
-  private async draw(scene: BoardCandidate): Promise<Buffer> {
+  /** One call for every chosen scene: cheap, and keeps the choices coherent. */
+  private async chooseShots(chosen: BoardCandidate[]): Promise<Map<number, Shot>> {
+    try {
+      const res = await this.gemini.ai.models.generateContent({
+        model: MODELS.fast,
+        contents: buildShotsPrompt(
+          chosen.map((c) => ({
+            index: c.index,
+            heading: c.heading,
+            action: c.action.replace(/\s+/g, ' ').slice(0, ACTION_CHARS),
+          })),
+        ),
+        config: {
+          systemInstruction: SHOTS_SYSTEM,
+          responseMimeType: 'application/json',
+          responseSchema: SHOTS_SCHEMA,
+          temperature: 0.3,
+        },
+      });
+      const shots = (JSON.parse(res.text ?? '{}') as { shots?: Shot[] }).shots ?? [];
+      return new Map(shots.map((s) => [s.sceneIndex, s]));
+    } catch (err) {
+      // A panel without a camera choice is still worth drawing.
+      this.log.warn(`previz: shot pass failed, drawing without direction — ${err}`);
+      return new Map();
+    }
+  }
+
+  private async draw(scene: BoardCandidate, shot?: Shot): Promise<Buffer> {
     const res = await this.gemini.ai.models.generateContent({
       model: IMAGE_MODEL,
-      contents: buildPanelPrompt(scene),
+      contents: buildPanelPrompt(scene, shot),
       config: { responseModalities: ['IMAGE'] },
     });
 
@@ -108,8 +170,9 @@ export class PrevizService {
   }
 }
 
-export function buildPanelPrompt(scene: BoardCandidate): string {
+export function buildPanelPrompt(scene: BoardCandidate, shot?: Shot): string {
   const action = scene.action.replace(/\s+/g, ' ').slice(0, ACTION_CHARS);
+  const composition = shot ? shotToComposition(shot) : '';
 
   return [
     'Draw a single production storyboard panel: rough black-and-white graphite sketch,',
@@ -120,6 +183,7 @@ export function buildPanelPrompt(scene: BoardCandidate): string {
     'looks like. Render people as anonymous, generic figures: no recognisable faces,',
     'no logos, insignia, costumes or likenesses of any real or fictional person.',
     '',
+    ...(composition ? [composition, ''] : []),
     `SLUGLINE: ${scene.heading}`,
     `ACTION: ${action}`,
   ].join('\n');

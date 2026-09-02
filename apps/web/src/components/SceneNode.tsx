@@ -1,6 +1,7 @@
 'use client';
 
 import { Handle, Position, type NodeProps } from '@xyflow/react';
+import { useBoardUrl } from '@/lib/useBoardUrl';
 
 export interface SceneNodeData extends Record<string, unknown> {
   heading: string;
@@ -10,6 +11,9 @@ export interface SceneNodeData extends Record<string, unknown> {
   flagCount: number;
   noteCount?: number;
   status?: 'draft' | 'developing' | 'confirmed';
+  boardPath?: string;
+  shotSlug?: string;
+  boardStale?: boolean;
   /** What-if state: how this scene is affected by the simulated cut. */
   impact?: 'cut' | 'orphaned' | 'dirty' | null;
   selected?: boolean;
@@ -42,6 +46,7 @@ const STATUS_COLOR = {
 
 export function SceneNode({ data }: NodeProps) {
   const d = data as SceneNodeData;
+  const boardUrl = useBoardUrl(d.boardPath);
   const base = loadStyle(d.loadScore ?? 0);
   const impact = d.impact ? IMPACT_STYLE[d.impact] : null;
   const s = impact ?? base;
@@ -88,6 +93,37 @@ export function SceneNode({ data }: NodeProps) {
           </span>
         )}
       </div>
+      {boardUrl && (
+        <div style={{ marginTop: 8, position: 'relative' }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={boardUrl}
+            alt=""
+            style={{
+              width: '100%', display: 'block', borderRadius: 5,
+              // A stale panel is dimmed rather than hidden: it is still the
+              // best picture of the scene, it just predates the rewrite.
+              opacity: d.boardStale ? 0.4 : 1,
+              filter: d.boardStale ? 'grayscale(1)' : undefined,
+            }}
+          />
+          {d.boardStale && (
+            <div style={{
+              position: 'absolute', top: 5, left: 5, background: '#2a1618ee',
+              color: '#f08a8a', fontSize: 8.5, padding: '2px 6px', borderRadius: 4,
+              letterSpacing: 0.3,
+            }}>
+              story changed
+            </div>
+          )}
+          {d.shotSlug && (
+            <div style={{ marginTop: 4, color: '#8b95a3', fontSize: 9, letterSpacing: 0.3 }}>
+              {d.shotSlug}
+            </div>
+          )}
+        </div>
+      )}
+
       <Handle type="source" position={Position.Right} />
     </div>
   );

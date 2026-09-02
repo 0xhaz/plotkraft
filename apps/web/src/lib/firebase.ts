@@ -3,6 +3,7 @@
 import { initializeApp, getApps, type FirebaseApp } from 'firebase/app';
 import { getAuth, connectAuthEmulator, GoogleAuthProvider, type Auth } from 'firebase/auth';
 import { getFirestore, connectFirestoreEmulator, type Firestore } from 'firebase/firestore';
+import { getStorage, connectStorageEmulator, type FirebaseStorage } from 'firebase/storage';
 
 export const USE_EMULATORS = process.env.NEXT_PUBLIC_USE_EMULATORS === 'true';
 const useEmulators = USE_EMULATORS;
@@ -18,6 +19,7 @@ const config = {
 let app: FirebaseApp | undefined;
 let authInstance: Auth | undefined;
 let dbInstance: Firestore | undefined;
+let storageInstance: FirebaseStorage | undefined;
 
 function ensureApp(): FirebaseApp {
   if (!app) app = getApps()[0] ?? initializeApp(config);
@@ -40,6 +42,14 @@ export function db(): Firestore {
     if (useEmulators) connectFirestoreEmulator(dbInstance, '127.0.0.1', 8181);
   }
   return dbInstance;
+}
+
+export function storage(): FirebaseStorage {
+  if (!storageInstance) {
+    storageInstance = getStorage(ensureApp(), `gs://${config.storageBucket}`);
+    if (useEmulators) connectStorageEmulator(storageInstance, '127.0.0.1', 9199);
+  }
+  return storageInstance;
 }
 
 export const googleProvider = new GoogleAuthProvider();
