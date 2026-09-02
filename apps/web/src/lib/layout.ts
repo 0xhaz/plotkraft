@@ -36,6 +36,56 @@ export function serpentineLayout(count: number, columns = COLUMNS): Placed[] {
   return Array.from({ length: count }, (_, i) => serpentinePosition(i, columns));
 }
 
+/** A card carrying a storyboard panel is far taller than a bare one. */
+export const CARD_H_BOARDED = 400;
+
+export function cardHeight(scene: { boarded?: boolean }): number {
+  return scene.boarded ? CARD_H_BOARDED : CARD_H;
+}
+
+export interface PackedRows {
+  positions: Placed[];
+  height: number;
+}
+
+/**
+ * Lay cards out in rows that fit whatever is in them.
+ *
+ * Two things the earlier fixed-height serpentine got wrong once panels existed.
+ *
+ * Height: a boarded card is roughly five times the height of a bare one, so
+ * spacing every row by the bare height ran tall cards straight through the row
+ * below. Each row is now as tall as its tallest card.
+ *
+ * Direction: boustrophedon was chosen to keep the wrapping *graph* edge short,
+ * which is right for a dependency diagram and wrong for a storyboard. A board is
+ * read like a page — left to right, every row — and snaking it makes the shot
+ * order impossible to follow. So a board with panels reads straight.
+ */
+export function packRows(
+  heights: number[],
+  columns = COLUMNS,
+  serpentine = false,
+): PackedRows {
+  const positions: Placed[] = [];
+  let y = 0;
+
+  for (let start = 0; start < heights.length; start += columns) {
+    const row = heights.slice(start, start + columns);
+    const rowHeight = Math.max(...row);
+
+    row.forEach((_, col) => {
+      const rowIndex = Math.floor(start / columns);
+      const x = serpentine && rowIndex % 2 === 1 ? columns - 1 - col : col;
+      positions.push({ x: x * (CARD_W + GAP_X), y });
+    });
+
+    y += rowHeight + GAP_Y;
+  }
+
+  return { positions, height: Math.max(0, y - GAP_Y) };
+}
+
 /**
  * Acts, derived from the Story Circle rather than guessed at.
  *
@@ -85,7 +135,7 @@ export const LARGE_SCRIPT = 40;
  * label the regions.
  */
 export function actLayout(
-  scenes: { id: string; index: number; circleStep?: number }[],
+  scenes: { id: string; index: number; circleStep?: number; boarded?: boolean }[],
   columns = COLUMNS,
   collapsed: ReadonlySet<Act> = new Set(),
 ): { positions: Map<string, Placed>; bands: ActBand[]; hidden: Set<string> } {
@@ -116,13 +166,13 @@ export function actLayout(
     }
 
     const bodyTop = cursorY + ACT_HEADER_H;
+    const packed = packRows(inAct.map(cardHeight), columns);
     inAct.forEach((s, i) => {
-      const p = serpentinePosition(i, columns);
+      const p = packed.positions[i];
       positions.set(s.id, { x: p.x, y: bodyTop + p.y });
     });
 
-    const rows = Math.ceil(inAct.length / columns);
-    const height = ACT_HEADER_H + rows * (CARD_H + GAP_Y);
+    const height = ACT_HEADER_H + packed.height + GAP_Y;
     bands.push({ act, label: ACT_LABEL[act], y: cursorY, height, sceneIds, collapsed: false });
     cursorY += height + GAP_Y;
   }
@@ -168,7 +218,7 @@ export interface Outline {
  * a 244-scene script into ten readable rows.
  */
 export function outlineLayout(
-  scenes: { id: string; index: number; circleStep?: number }[],
+  scenes: { id: string; index: number; circleStep?: number; boarded?: boolean }[],
   sequences: SequenceMeta[],
   collapsedSeqs: ReadonlySet<number>,
   collapsedActs: ReadonlySet<Act>,
@@ -180,6 +230,9 @@ export function outlineLayout(
   const seqBands: SequenceBand[] = [];
 
   const byIndex = new Map(scenes.map((s) => [s.index, s]));
+  const byId = new Map(scenes.map((s) => [s.index, s]));
+  const idToIndex = new Map(scenes.map((s) => [s.id, s.index]));
+  const packedHeights = new Map<string, number>();
   const ordered = [...sequences].sort((a, b) => a.startIndex - b.startIndex);
   const acts: Act[] = [1, 2, 3, 0];
 
@@ -209,14 +262,20 @@ export function outlineLayout(
       if (seqCollapsed) {
         for (const id of sceneIds) hidden.add(id);
       } else {
+        const inSeq = sceneIds.map((id) => byId.get(idToIndex.get(id) ?? -1));
+        const packed = packRows(
+          sceneIds.map((_, i) => cardHeight(inSeq[i] ?? {})),
+          columns,
+        );
         sceneIds.forEach((id, i) => {
-          const p = serpentinePosition(i, columns);
+          const p = packed.positions[i];
           positions.set(id, { x: p.x, y: actTop + innerY + SEQ_HEADER_H + p.y });
         });
+        packedHeights.set(`${act}-${q.order}`, packed.height);
       }
 
-      const rows = seqCollapsed ? 0 : Math.ceil(sceneIds.length / columns);
-      const height = SEQ_HEADER_H + rows * (CARD_H + GAP_Y);
+      const height =
+        SEQ_HEADER_H + (seqCollapsed ? 0 : (packedHeights.get(`${act}-${q.order}`) ?? 0) + GAP_Y);
 
       seqBands.push({
         key: `${act}-${q.order}`,

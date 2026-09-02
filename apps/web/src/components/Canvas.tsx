@@ -257,7 +257,12 @@ export function Canvas({ projectId }: { projectId: string }) {
    */
   const outline = useMemo(() => {
     if (!byAct) return null;
-    const shape = scenes.map((s) => ({ id: s.id, index: s.index, circleStep: s.circleStep }));
+    const shape = scenes.map((s) => ({
+      id: s.id,
+      index: s.index,
+      circleStep: s.circleStep,
+      boarded: Boolean(s.boardPath),
+    }));
     if (sequences.length > 0) {
       return outlineLayout(shape, sequences, collapsedSeqs, collapsed);
     }

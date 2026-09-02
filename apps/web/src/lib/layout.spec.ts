@@ -206,3 +206,55 @@ describe('outlineLayout', () => {
     expect(o.seqBands[0].sceneIds).toEqual([]);
   });
 });
+
+import { packRows, CARD_H_BOARDED, CARD_H, GAP_Y } from './layout';
+
+describe('packRows', () => {
+  const bare = (n: number) => Array.from({ length: n }, () => CARD_H);
+
+  it('reads left to right on every row by default', () => {
+    // A storyboard is read like a page. Snaking it makes shot order unfollowable.
+    const { positions } = packRows(bare(8), 4);
+    expect(positions[4].x).toBe(0);
+    expect(positions[5].x).toBeGreaterThan(positions[4].x);
+    expect(positions[7].x).toBeGreaterThan(positions[5].x);
+  });
+
+  it('can still snake when asked, for the graph view', () => {
+    const { positions } = packRows(bare(8), 4, true);
+    expect(positions[4].x).toBeGreaterThan(positions[5].x);
+  });
+
+  it('gives a row the height of its tallest card', () => {
+    // The overlap bug: one boarded card in a row of bare ones.
+    const heights = [CARD_H, CARD_H_BOARDED, CARD_H, CARD_H, CARD_H];
+    const { positions } = packRows(heights, 4);
+    expect(positions[4].y).toBeGreaterThanOrEqual(CARD_H_BOARDED + GAP_Y);
+  });
+
+  it('never lets a card overlap the row beneath it', () => {
+    const heights = [CARD_H_BOARDED, CARD_H, CARD_H_BOARDED, CARD_H, CARD_H, CARD_H];
+    const { positions } = packRows(heights, 3);
+    for (let i = 0; i < 3; i++) {
+      const bottom = positions[i].y + heights[i];
+      expect(positions[i + 3].y).toBeGreaterThanOrEqual(bottom);
+    }
+  });
+
+  it('keeps short rows compact when nothing is boarded', () => {
+    const { height } = packRows(bare(4), 4);
+    expect(height).toBe(CARD_H);
+  });
+
+  it('reports a total height that contains every card', () => {
+    const heights = [CARD_H, CARD_H_BOARDED, CARD_H];
+    const { positions, height } = packRows(heights, 2);
+    for (let i = 0; i < heights.length; i++) {
+      expect(positions[i].y + heights[i]).toBeLessThanOrEqual(height + 1);
+    }
+  });
+
+  it('handles an empty board', () => {
+    expect(packRows([], 4)).toEqual({ positions: [], height: 0 });
+  });
+});
