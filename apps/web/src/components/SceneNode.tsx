@@ -14,6 +14,10 @@ export interface SceneNodeData extends Record<string, unknown> {
   boardPath?: string;
   shotSlug?: string;
   boardStale?: boolean;
+  /** Draw or redraw just this scene. Absent on a read-only reference board. */
+  onDraw?: (sceneId: string) => void;
+  drawing?: boolean;
+  sceneId?: string;
   /** What-if state: how this scene is affected by the simulated cut. */
   impact?: 'cut' | 'orphaned' | 'dirty' | null;
   selected?: boolean;
@@ -93,6 +97,30 @@ export function SceneNode({ data }: NodeProps) {
           </span>
         )}
       </div>
+      {d.onDraw && (
+        <button
+          onClick={(e) => {
+            // Without this the click also selects the card, and a selected card
+            // is what "Simulate cut" acts on.
+            e.stopPropagation();
+            if (!d.drawing && d.sceneId) d.onDraw!(d.sceneId);
+          }}
+          disabled={d.drawing}
+          title={boardUrl ? 'Draw this panel again' : 'Draw a storyboard panel for this scene'}
+          style={{
+            marginTop: 8, width: '100%',
+            background: d.boardStale ? '#33222a' : '#22272f',
+            border: `1px solid ${d.boardStale ? '#5a3a42' : '#2a2f38'}`,
+            borderRadius: 6,
+            color: d.drawing ? '#6b7280' : d.boardStale ? '#f0a8a8' : '#9aa4b2',
+            fontSize: 10, padding: '5px 0',
+            cursor: d.drawing ? 'default' : 'pointer',
+          }}
+        >
+          {d.drawing ? 'Drawing…' : boardUrl ? (d.boardStale ? 'Redraw — out of date' : 'Redraw') : 'Draw panel'}
+        </button>
+      )}
+
       {boardUrl && (
         <div style={{ marginTop: 8, position: 'relative' }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}

@@ -77,6 +77,7 @@ export function Canvas({ projectId }: { projectId: string }) {
   const [autoGrouped, setAutoGrouped] = useState(false);
   const [sequences, setSequences] = useState<SequenceMeta[]>([]);
   const [collapsedSeqs, setCollapsedSeqs] = useState<ReadonlySet<number>>(new Set());
+  const [drawing, setDrawing] = useState<ReadonlySet<string>>(new Set());
 
   useEffect(() => {
     setAccessDenied(false);
@@ -181,6 +182,35 @@ export function Canvas({ projectId }: { projectId: string }) {
       setBusy(null);
     }
   };
+
+  /**
+   * Draw one panel, from the card itself.
+   *
+   * Per-scene drawing is the common case once a board exists: a scene gets
+   * rewritten, its panel goes out of date, and redrawing the whole film to fix
+   * one frame is exactly the waste the staleness marking exists to avoid.
+   */
+  const drawScene = useCallback(
+    async (sceneId: string) => {
+      setDrawing((prev) => new Set(prev).add(sceneId));
+      setError(null);
+      try {
+        const res = await generateBoards(projectId, { sceneIds: [sceneId] });
+        if (res.drawn === 0) {
+          setError('The image model refused that panel — usually a rate limit. Try again shortly.');
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'could not draw that panel');
+      } finally {
+        setDrawing((prev) => {
+          const next = new Set(prev);
+          next.delete(sceneId);
+          return next;
+        });
+      }
+    },
+    [projectId],
+  );
 
   /** Board a scope: the selected scenes if any, otherwise the whole script. */
   const runBoards = async () => {
@@ -364,6 +394,10 @@ export function Canvas({ projectId }: { projectId: string }) {
           status: mode === 'original' ? (s.status ?? 'draft') : undefined,
           boardPath: s.boardPath,
           boardStale: stale.has(s.id),
+          sceneId: s.id,
+          // A reference screenplay is someone else's finished work: read-only.
+          onDraw: mode === 'original' ? drawScene : undefined,
+          drawing: drawing.has(s.id),
           shotSlug: s.shot
             ? [s.shot.size, s.shot.angle, s.shot.movement !== 'static' ? s.shot.movement : null]
                 .filter(Boolean)
@@ -374,7 +408,7 @@ export function Canvas({ projectId }: { projectId: string }) {
           loadDelta: deltaFor.get(s.id),
         },
       })),
-    [scenes, impactFor, selected, deltaFor, acts, mode, stale],
+    [scenes, impactFor, selected, deltaFor, acts, mode, stale, drawing, drawScene],
   );
 
   // React Flow needs to own node state for dragging to do anything. Firestore
