@@ -258,3 +258,88 @@ describe('packRows', () => {
     expect(packRows([], 4)).toEqual({ positions: [], height: 0 });
   });
 });
+
+import { cascadeLayout, CARD_W as CW, GAP_X as GX, type Act } from './layout';
+
+describe('cascadeLayout', () => {
+  const scenes = [
+    { id: 'a0', index: 0, circleStep: 1 },
+    { id: 'a1', index: 1, circleStep: 2 },
+    { id: 'b0', index: 2, circleStep: 4 },
+    { id: 'b1', index: 3, circleStep: 5 },
+    { id: 'c0', index: 4, circleStep: 8 },
+  ];
+
+  it('runs the scenes of an act along one line', () => {
+    // The point: consecutive scenes are neighbours, so the edge between them is
+    // a short horizontal connector rather than a wrap across the board.
+    const { positions } = cascadeLayout(scenes);
+    expect(positions.get('a0')!.y).toBe(positions.get('a1')!.y);
+    expect(positions.get('a1')!.x - positions.get('a0')!.x).toBe(CW + GX);
+  });
+
+  it('keeps scenes in script order left to right', () => {
+    const { positions } = cascadeLayout(scenes);
+    expect(positions.get('a0')!.x).toBeLessThan(positions.get('a1')!.x);
+    expect(positions.get('b0')!.x).toBeLessThan(positions.get('b1')!.x);
+  });
+
+  it('steps each act down and to the right of the last', () => {
+    const { bands } = cascadeLayout(scenes);
+    for (let i = 1; i < bands.length; i++) {
+      expect(bands[i].x).toBeGreaterThan(bands[i - 1].x);
+      expect(bands[i].y).toBeGreaterThan(bands[i - 1].y);
+    }
+  });
+
+  it('starts an act after the previous one ends, never overlapping it', () => {
+    const { bands } = cascadeLayout(scenes);
+    for (let i = 1; i < bands.length; i++) {
+      expect(bands[i].x).toBeGreaterThanOrEqual(bands[i - 1].x + bands[i - 1].width);
+    }
+  });
+
+  it('makes a long act visibly long', () => {
+    // The board should show the shape of the film: act two runs long.
+    const many = [
+      { id: 'a', index: 0, circleStep: 1 },
+      ...Array.from({ length: 20 }, (_, i) => ({ id: `b${i}`, index: 1 + i, circleStep: 5 })),
+      { id: 'c', index: 30, circleStep: 8 },
+    ];
+    const { bands } = cascadeLayout(many);
+    const two = bands.find((b) => b.act === 2)!;
+    const one = bands.find((b) => b.act === 1)!;
+    expect(two.width).toBeGreaterThan(one.width * 10);
+  });
+
+  it('gives a boarded act the height its panels need', () => {
+    const boarded = [{ id: 'a', index: 0, circleStep: 1, boarded: true }];
+    const bare = [{ id: 'a', index: 0, circleStep: 1 }];
+    expect(cascadeLayout(boarded).bands[0].height)
+      .toBeGreaterThan(cascadeLayout(bare).bands[0].height);
+  });
+
+  it('collapses an act to a header and hides its scenes', () => {
+    const { hidden, positions, bands } = cascadeLayout(scenes, new Set([2] as Act[]));
+    expect(hidden.has('b0')).toBe(true);
+    expect(positions.has('b0')).toBe(false);
+    expect(bands.find((b) => b.act === 2)!.collapsed).toBe(true);
+  });
+
+  it('pulls the later acts in when one collapses', () => {
+    const open = cascadeLayout(scenes).bands.find((b) => b.act === 3)!;
+    const shut = cascadeLayout(scenes, new Set([2] as Act[])).bands.find((b) => b.act === 3)!;
+    expect(shut.x).toBeLessThan(open.x);
+  });
+
+  it('omits an act with no scenes rather than leaving a gap', () => {
+    const { bands } = cascadeLayout([{ id: 'a', index: 0, circleStep: 1 }]);
+    expect(bands.map((b) => b.act)).toEqual([1]);
+  });
+
+  it('handles an empty script', () => {
+    const { positions, bands } = cascadeLayout([]);
+    expect(positions.size).toBe(0);
+    expect(bands).toEqual([]);
+  });
+});

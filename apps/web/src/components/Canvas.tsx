@@ -19,8 +19,8 @@ import {
 import { db } from '@/lib/firebase';
 import { stalePanels, countStale } from '@/lib/staleness';
 import {
-  serpentinePosition, actLayout, outlineLayout, CARD_W, GAP_X, COLUMNS, LARGE_SCRIPT,
-  type ActBand, type Act, type SequenceBand, type SequenceMeta,
+  serpentinePosition, cascadeLayout, CARD_W, GAP_X, COLUMNS, LARGE_SCRIPT,
+  type Act, type CascadeBand, type SequenceMeta,
 } from '@/lib/layout';
 import { SceneNode, type SceneNodeData } from './SceneNode';
 import { EDGE_STYLE, TransitionEdge } from './TransitionEdge';
@@ -252,25 +252,30 @@ export function Canvas({ projectId }: { projectId: string }) {
    * arrangement of the board rather than destroying it.
    */
   /**
-   * Three levels when sequences exist, two when they do not. Sequences are the
-   * rung that makes a feature readable: acts alone left 138 cards in Act Two.
+   * Acts as a descending staircase, each a single line of scenes.
+   *
+   * The grid put consecutive scenes on different rows, so the causal edge
+   * between them wrapped across the board and the whole thing read as a tangle.
+   * Here the script runs left to right within an act, every therefore and but
+   * joins two neighbours, and the shape of the board is the shape of the film.
    */
-  const outline = useMemo(() => {
-    if (!byAct) return null;
-    const shape = scenes.map((s) => ({
-      id: s.id,
-      index: s.index,
-      circleStep: s.circleStep,
-      boarded: Boolean(s.boardPath),
-    }));
-    if (sequences.length > 0) {
-      return outlineLayout(shape, sequences, collapsedSeqs, collapsed);
-    }
-    const flat = actLayout(shape, COLUMNS, collapsed);
-    return { ...flat, actBands: flat.bands, seqBands: [] as SequenceBand[] };
-  }, [byAct, scenes, sequences, collapsedSeqs, collapsed]);
+  const cascade = useMemo(
+    () =>
+      byAct
+        ? cascadeLayout(
+            scenes.map((s) => ({
+              id: s.id,
+              index: s.index,
+              circleStep: s.circleStep,
+              boarded: Boolean(s.boardPath),
+            })),
+            collapsed,
+          )
+        : null,
+    [byAct, scenes, collapsed],
+  );
 
-  const acts = outline;
+  const acts = cascade;
 
   // Sequences start closed. Ten shut rows is the point of having them; opening
   // all ten would put the writer back in front of 244 cards.
@@ -463,14 +468,7 @@ export function Canvas({ projectId }: { projectId: string }) {
         fitView
       >
         <Background color="#2a2f38" gap={20} />
-        {acts && (
-          <Bands
-            actBands={acts.actBands}
-            seqBands={acts.seqBands}
-            onToggleAct={toggleAct}
-            onToggleSeq={toggleSeq}
-          />
-        )}
+        {acts && <Bands bands={acts.bands} onToggle={toggleAct} />}
         <Controls />
         <MiniMap
           pannable
@@ -550,29 +548,17 @@ export function Canvas({ projectId }: { projectId: string }) {
   );
 }
 
-/** Labelled regions behind the cards, drawn in canvas coordinates. */
-function Bands({
-  actBands,
-  seqBands,
-  onToggleAct,
-  onToggleSeq,
-}: {
-  actBands: ActBand[];
-  seqBands: SequenceBand[];
-  onToggleAct: (act: Act) => void;
-  onToggleSeq: (order: number) => void;
-}) {
-  const width = COLUMNS * (CARD_W + GAP_X) - GAP_X + 48;
-
+/** Labelled lanes behind the cards, drawn in canvas coordinates. */
+function Bands({ bands, onToggle }: { bands: CascadeBand[]; onToggle: (act: Act) => void }) {
   return (
     <ViewportPortal>
-      {actBands.map((b) => (
+      {bands.map((b) => (
         <div
           key={`act-${b.act}`}
           style={{
             position: 'absolute',
-            transform: `translate(-24px, ${b.y}px)`,
-            width,
+            transform: `translate(${b.x - 20}px, ${b.y}px)`,
+            width: b.width + 40,
             height: b.height,
             border: `1px solid ${b.act === 0 ? '#2a2f38' : '#243040'}`,
             borderRadius: 14,
@@ -582,46 +568,23 @@ function Bands({
           }}
         >
           <button
-            onClick={() => onToggleAct(b.act)}
-            style={{ ...BAND.actHeader, color: b.act === 0 ? '#6b7280' : '#7aa2e3' }}
+            onClick={() => onToggle(b.act)}
+            style={{
+              // Only the header takes clicks; the lane must not swallow
+              // interaction with the cards inside it.
+              pointerEvents: 'all',
+              display: 'flex', alignItems: 'center', gap: 10,
+              background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left',
+              padding: '13px 18px', fontSize: 12.5, fontWeight: 600, letterSpacing: 0.4,
+              color: b.act === 0 ? '#6b7280' : '#7aa2e3', whiteSpace: 'nowrap',
+              fontFamily: 'ui-sans-serif, system-ui, sans-serif',
+            }}
           >
             <span style={{ fontSize: 10, opacity: 0.8 }}>{b.collapsed ? '▶' : '▼'}</span>
             {b.label}
             <span style={{ color: '#6b7280', fontWeight: 400 }}>
               {b.sceneIds.length} scene{b.sceneIds.length === 1 ? '' : 's'}
-            </span>
-          </button>
-        </div>
-      ))}
-
-      {seqBands.map((q) => (
-        <div
-          key={q.key}
-          style={{
-            position: 'absolute',
-            transform: `translate(-8px, ${q.y}px)`,
-            width: width - 32,
-            height: q.height,
-            border: '1px solid #1f2833',
-            borderRadius: 10,
-            background: q.collapsed ? '#151a21' : '#12161c',
-            pointerEvents: 'none',
-            zIndex: 1,
-          }}
-        >
-          <button onClick={() => onToggleSeq(q.order)} style={BAND.seqHeader}>
-            <span style={{ fontSize: 9, opacity: 0.7, color: '#7aa2e3' }}>
-              {q.collapsed ? '▶' : '▼'}
-            </span>
-            <span style={{ color: '#8b95a3', fontVariantNumeric: 'tabular-nums' }}>
-              {q.order + 1}.
-            </span>
-            <span style={{ color: '#e8eaed', fontWeight: 600 }}>{q.name}</span>
-            {q.purpose && (
-              <span style={{ color: '#6f7986', fontWeight: 400 }}>— {q.purpose}</span>
-            )}
-            <span style={{ marginLeft: 'auto', color: '#6b7280', fontWeight: 400 }}>
-              {q.sceneIds.length}
+              {b.collapsed ? ' · hidden' : ''}
             </span>
           </button>
         </div>
@@ -629,25 +592,6 @@ function Bands({
     </ViewportPortal>
   );
 }
-
-const BAND: Record<string, React.CSSProperties> = {
-  actHeader: {
-    // Only headers take clicks; the bands must not swallow interaction with
-    // the cards drawn inside them.
-    pointerEvents: 'all',
-    display: 'flex', alignItems: 'center', gap: 10, width: '100%',
-    background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left',
-    padding: '13px 18px', fontSize: 12.5, fontWeight: 600, letterSpacing: 0.4,
-    fontFamily: 'ui-sans-serif, system-ui, sans-serif',
-  },
-  seqHeader: {
-    pointerEvents: 'all',
-    display: 'flex', alignItems: 'center', gap: 8, width: '100%',
-    background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left',
-    padding: '11px 14px', fontSize: 12,
-    fontFamily: 'ui-sans-serif, system-ui, sans-serif',
-  },
-};
 
 function Inspector(props: {
   sceneCount: number;

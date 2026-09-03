@@ -306,3 +306,105 @@ export function outlineLayout(
 
   return { positions, actBands, seqBands, hidden };
 }
+
+/** How far each act steps down from the one before it. */
+export const CASCADE_STEP_Y = 120;
+/** Width of a collapsed act's header block. */
+export const COLLAPSED_ACT_W = 320;
+
+export interface CascadeBand {
+  act: Act;
+  label: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  sceneIds: string[];
+  collapsed: boolean;
+}
+
+export interface Cascade {
+  positions: Map<string, Placed>;
+  bands: CascadeBand[];
+  hidden: Set<string>;
+}
+
+/**
+ * Acts as a descending staircase, scenes in a single line within each.
+ *
+ * The grid layouts put consecutive scenes on different rows, which meant the
+ * causal edge between them wrapped across the board and the whole thing read as
+ * a tangle rather than a sequence. Here the script runs left to right inside an
+ * act, so every therefore/but joins two neighbours and can be read — and
+ * retargeted — at a glance.
+ *
+ * Each act begins where the previous one ended and one step lower, so the shape
+ * of the film is legible from the shape of the board: a long flat second act
+ * looks long, and a compressed third act looks compressed.
+ *
+ * A long act becomes a very wide row. That is deliberate — this is a pannable
+ * canvas and collapsing an act is one click — because wrapping would reintroduce
+ * exactly the long diagonal edge this layout exists to remove.
+ */
+export function cascadeLayout(
+  scenes: { id: string; index: number; circleStep?: number; boarded?: boolean }[],
+  collapsedActs: ReadonlySet<Act> = new Set(),
+): Cascade {
+  const positions = new Map<string, Placed>();
+  const hidden = new Set<string>();
+  const bands: CascadeBand[] = [];
+
+  let cursorX = 0;
+  let cursorY = 0;
+
+  for (const act of [1, 2, 3, 0] as Act[]) {
+    const inAct = scenes
+      .filter((s) => actOfStep(s.circleStep) === act)
+      .sort((a, b) => a.index - b.index);
+    if (inAct.length === 0) continue;
+
+    const collapsed = collapsedActs.has(act);
+    const bodyTop = cursorY + ACT_HEADER_H;
+
+    if (collapsed) {
+      for (const s of inAct) hidden.add(s.id);
+      bands.push({
+        act,
+        label: ACT_LABEL[act],
+        x: cursorX,
+        y: cursorY,
+        width: COLLAPSED_ACT_W,
+        height: ACT_HEADER_H,
+        sceneIds: inAct.map((s) => s.id),
+        collapsed: true,
+      });
+      cursorX += COLLAPSED_ACT_W + GAP_X;
+      cursorY += CASCADE_STEP_Y;
+      continue;
+    }
+
+    inAct.forEach((s, i) => {
+      positions.set(s.id, { x: cursorX + i * (CARD_W + GAP_X), y: bodyTop });
+    });
+
+    const rowHeight = Math.max(...inAct.map(cardHeight));
+    const width = inAct.length * (CARD_W + GAP_X) - GAP_X;
+
+    bands.push({
+      act,
+      label: ACT_LABEL[act],
+      x: cursorX,
+      y: cursorY,
+      width,
+      height: ACT_HEADER_H + rowHeight + 16,
+      sceneIds: inAct.map((s) => s.id),
+      collapsed: false,
+    });
+
+    // The next act starts where this one ended, one step lower.
+    cursorX += width + GAP_X;
+    cursorY = bodyTop + rowHeight + CASCADE_STEP_Y;
+  }
+
+  return { positions, bands, hidden };
+}
