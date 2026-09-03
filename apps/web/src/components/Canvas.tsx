@@ -294,14 +294,24 @@ export function Canvas({ projectId }: { projectId: string }) {
     });
   }, []);
 
-  // A feature runs to 150-250 scenes. A flat grid of that is unreadable, so a
-  // large script opens grouped — once only, so the writer's later choice sticks.
+  /**
+   * Open grouped as soon as the acts are known.
+   *
+   * The trigger used to be script length, which meant a short script landed on
+   * the ungrouped board — scenes at their stored positions, consecutive beats on
+   * different rows, every causal edge wrapping across the canvas. That tangle was
+   * the first thing a writer saw, with the layout that fixes it behind a toggle.
+   * The real precondition is not size, it is whether Story Circle has run: acts
+   * are what there is to group by. Applied once, so a later choice sticks.
+   */
+  const actsKnown = useMemo(() => scenes.some((s) => s.circleStep), [scenes]);
+
   useEffect(() => {
-    if (!autoGrouped && scenes.length > LARGE_SCRIPT) {
+    if (!autoGrouped && (actsKnown || scenes.length > LARGE_SCRIPT)) {
       setByAct(true);
       setAutoGrouped(true);
     }
-  }, [scenes.length, autoGrouped]);
+  }, [actsKnown, scenes.length, autoGrouped]);
 
   const toggleAct = useCallback((act: Act) => {
     setCollapsed((prev) => {
